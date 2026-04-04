@@ -43,3 +43,25 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Backend confidential/local files
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/avatars/
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
+
+# Secrets / keys / certs
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Cloud credentials
+*credentials*.json
+*service-account*.json
