@@ -194,6 +194,23 @@ class _CortexScreenState extends State<CortexScreen> {
               'Scheduled Messages',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: () => _showScheduleDialog(context),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.add_alarm_outlined, color: accentColor, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Schedule Message',
+                      style: TextStyle(color: accentColor, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 12),
             ..._scheduledMessages.map((message) {
               final timeText = message.scheduledAt == null
@@ -270,6 +287,8 @@ class _CortexScreenState extends State<CortexScreen> {
   }
 
   Future<void> _updateAutoReply(bool value) async {
+    final prevAutoReply = _autoReplyEnabled;
+    final prevCortexEnabled = _cortexEnabled;
     final next = BackendCortexConfig(
       enabled: value || _cortexEnabled,
       autoReply: value,
@@ -282,6 +301,12 @@ class _CortexScreenState extends State<CortexScreen> {
     try {
       await _apiClient.updateCortexConfig(next);
     } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _autoReplyEnabled = prevAutoReply;
+        _cortexEnabled = prevCortexEnabled;
+      });
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Failed to update auto-reply.')),
@@ -369,10 +394,10 @@ class _CortexScreenState extends State<CortexScreen> {
                   setState(() {
                     _savedReplies.add(created);
                   });
-                } catch (_) {
+                } catch (error) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(this.context).showSnackBar(
-                    const SnackBar(content: Text('Failed to add reply template.')),
+                    SnackBar(content: Text('Failed to add reply template: $error')),
                   );
                 }
               },
@@ -382,5 +407,104 @@ class _CortexScreenState extends State<CortexScreen> {
         );
       },
     );
+  }
+
+  Future<void> _showScheduleDialog(BuildContext context) async {
+    final bodyController = TextEditingController();
+    DateTime selectedDateTime = DateTime.now().add(const Duration(hours: 1));
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: const Text('Schedule Message'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: bodyController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      hintText: 'Write message to send later',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextButton.icon(
+                    onPressed: () async {
+                      final pickedDate = await showDatePicker(
+                        context: dialogContext,
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                        initialDate: selectedDateTime,
+                      );
+                      if (pickedDate == null) return;
+                      if (!dialogContext.mounted) return;
+                      final pickedTime = await showTimePicker(
+                        context: dialogContext,
+                        initialTime: TimeOfDay.fromDateTime(selectedDateTime),
+                      );
+                      if (pickedTime == null) return;
+                      if (!dialogContext.mounted) return;
+
+                      setDialogState(() {
+                        selectedDateTime = DateTime(
+                          pickedDate.year,
+                          pickedDate.month,
+                          pickedDate.day,
+                          pickedTime.hour,
+                          pickedTime.minute,
+                        );
+                      });
+                    },
+                    icon: const Icon(Icons.schedule),
+                    label: Text('At: ${selectedDateTime.toLocal()}'),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    final draft = bodyController.text.trim();
+                    if (draft.isEmpty) return;
+                    try {
+                      final created = await _apiClient.createScheduledMessage(
+                        draftBody: draft,
+                        scheduledAt: selectedDateTime,
+                      );
+                      if (!mounted) return;
+                      setState(() {
+                        _scheduledMessages.add(created);
+                        _scheduledMessages.sort((a, b) {
+                          final at = a.scheduledAt ?? DateTime.now();
+                          final bt = b.scheduledAt ?? DateTime.now();
+                          return at.compareTo(bt);
+                        });
+                      });
+                      if (dialogContext.mounted) Navigator.pop(dialogContext);
+                    } catch (error) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(this.context).showSnackBar(
+                        SnackBar(content: Text('Failed to schedule message: $error')),
+                      );
+                    }
+                  },
+                  child: const Text('Schedule'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    bodyController.dispose();
   }
 }

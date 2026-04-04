@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"sort"
 	"strings"
@@ -19,12 +20,12 @@ type MongoStore struct {
 	db     *mongo.Database
 }
 
-func NewMongoStore(ctx context.Context, uri, dbName string) (*MongoStore, error) {
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
-	if err != nil {
-		return nil, err
+func NewMongoStore(ctx context.Context, uri, dbName string, timeout time.Duration, insecureTLS bool) (*MongoStore, error) {
+	client, err := connectMongo(ctx, uri, timeout, insecureTLS)
+	if err != nil && !insecureTLS && strings.HasPrefix(strings.ToLower(uri), "mongodb+srv://") {
+		client, err = connectMongo(ctx, uri, timeout, true)
 	}
-	if err := client.Ping(ctx, nil); err != nil {
+	if err != nil {
 		return nil, err
 	}
 	s := &MongoStore{client: client, db: client.Database(dbName)}
@@ -32,6 +33,26 @@ func NewMongoStore(ctx context.Context, uri, dbName string) (*MongoStore, error)
 		return nil, err
 	}
 	return s, nil
+}
+
+func connectMongo(ctx context.Context, uri string, timeout time.Duration, insecureTLS bool) (*mongo.Client, error) {
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	clientOptions := options.Client().ApplyURI(uri).SetServerSelectionTimeout(timeout).SetConnectTimeout(timeout)
+	if insecureTLS {
+		clientOptions.SetTLSConfig(&tls.Config{InsecureSkipVerify: true})
+	}
+
+	client, err := mongo.Connect(ctx, clientOptions)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.Ping(ctx, nil); err != nil {
+		_ = client.Disconnect(context.Background())
+		return nil, err
+	}
+	return client, nil
 }
 
 func (s *MongoStore) Close(ctx context.Context) error {

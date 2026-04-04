@@ -19,7 +19,7 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	mongoStore, err := store.NewMongoStore(ctx, cfg.MongoURI, cfg.MongoDBName)
+	mongoStore, err := store.NewMongoStore(ctx, cfg.MongoURI, cfg.MongoDBName, cfg.MongoTimeout, cfg.MongoInsecure)
 	if err != nil {
 		log.Fatalf("failed connecting MongoDB: %v", err)
 	}

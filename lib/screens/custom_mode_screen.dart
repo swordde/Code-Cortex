@@ -477,10 +477,10 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
     try {
       final response = await _apiClient.updateMode(updated);
       _backendModesByDisplay[_selectedMode] = response;
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to sync mode changes.')),
+        SnackBar(content: Text('Failed to sync mode changes: $error')),
       );
     }
   }
@@ -600,10 +600,10 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                     _prioritizedAppsByMode[display] = <String>{};
                     _selectedMode = display;
                   });
-                } catch (_) {
+                } catch (error) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(this.context).showSnackBar(
-                    const SnackBar(content: Text('Failed to create mode.')),
+                    SnackBar(content: Text('Failed to create mode: $error')),
                   );
                 }
               },
@@ -688,10 +688,10 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                         );
                       });
                       await _syncSelectedMode();
-                    } catch (_) {
+                    } catch (error) {
                       if (!mounted) return;
                       ScaffoldMessenger.of(this.context).showSnackBar(
-                        const SnackBar(content: Text('Failed to add contact rule.')),
+                        SnackBar(content: Text('Failed to add contact rule: $error')),
                       );
                     }
                   },
@@ -778,10 +778,10 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                         );
                       });
                       await _syncSelectedMode();
-                    } catch (_) {
+                    } catch (error) {
                       if (!mounted) return;
                       ScaffoldMessenger.of(this.context).showSnackBar(
-                        const SnackBar(content: Text('Failed to add keyword rule.')),
+                        SnackBar(content: Text('Failed to add keyword rule: $error')),
                       );
                     }
                   },

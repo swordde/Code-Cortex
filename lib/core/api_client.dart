@@ -203,6 +203,24 @@ class ApiClient {
         .toList();
   }
 
+  Future<BackendScheduledMessage> createScheduledMessage({
+    required String draftBody,
+    required DateTime scheduledAt,
+    String notificationId = 'manual',
+  }) async {
+    final response = await _client.post(
+      BackendEndpoints.cortexScheduledUri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'notification_id': notificationId,
+        'draft_body': draftBody,
+        'scheduled_at': scheduledAt.toUtc().toIso8601String(),
+      }),
+    );
+    _ensureSuccess(response, 'Failed to schedule message');
+    return BackendScheduledMessage.fromJson(jsonDecode(response.body));
+  }
+
   Future<void> approveScheduledMessage(String id) async {
     final response = await _client.put(BackendEndpoints.approveScheduledUri(id));
     _ensureSuccess(response, 'Failed to approve scheduled message');

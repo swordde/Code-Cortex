@@ -83,6 +83,7 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("PUT /api/cortex/replies/{id}", a.handleUpdateReply)
 	mux.HandleFunc("DELETE /api/cortex/replies/{id}", a.handleDeleteReply)
 	mux.HandleFunc("GET /api/cortex/scheduled", a.handleListScheduled)
+	mux.HandleFunc("POST /api/cortex/scheduled", a.handleCreateScheduled)
 	mux.HandleFunc("PUT /api/cortex/scheduled/{id}/approve", a.handleApproveScheduled)
 	mux.HandleFunc("DELETE /api/cortex/scheduled/{id}", a.handleCancelScheduled)
 	mux.HandleFunc("GET /api/cortex/activity", a.handleListActivity)
@@ -504,6 +505,29 @@ func (a *API) handleListScheduled(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
+}
+
+func (a *API) handleCreateScheduled(w http.ResponseWriter, r *http.Request) {
+	var item models.ScheduledMessage
+	if err := json.NewDecoder(r.Body).Decode(&item); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json body", "VALIDATION_ERROR")
+		return
+	}
+	if item.DraftBody == "" || item.ScheduledAt.IsZero() {
+		writeError(w, http.StatusBadRequest, "draft_body and scheduled_at are required", "VALIDATION_ERROR")
+		return
+	}
+	if item.NotificationID == "" {
+		item.NotificationID = "manual"
+	}
+	item.ID = uuid.NewString()
+	item.Status = "pending"
+
+	if err := a.store.CreateScheduled(r.Context(), &item); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create scheduled message", "INTERNAL_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
 }
 
 func (a *API) handleApproveScheduled(w http.ResponseWriter, r *http.Request) {
