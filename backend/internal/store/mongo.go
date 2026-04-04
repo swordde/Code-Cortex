@@ -72,10 +72,6 @@ func (s *MongoStore) ensureSeeds(ctx context.Context) error {
 	if count == 0 {
 		preset := []any{
 			models.Mode{ID: "mode-default", Name: "default", IsActive: true, IsPreset: true, CortexLevel: "off"},
-			models.Mode{ID: "mode-study", Name: "study", IsActive: false, IsPreset: true, CortexLevel: "auto"},
-			models.Mode{ID: "mode-office", Name: "office", IsActive: false, IsPreset: true, CortexLevel: "draft"},
-			models.Mode{ID: "mode-home", Name: "home", IsActive: false, IsPreset: true, CortexLevel: "draft"},
-			models.Mode{ID: "mode-gaming", Name: "gaming", IsActive: false, IsPreset: true, CortexLevel: "auto"},
 		}
 		if _, err := modesCol.InsertMany(ctx, preset); err != nil {
 			return err

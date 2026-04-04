@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../core/installed_apps_service.dart';
 
 class CustomModeScreen extends StatefulWidget {
   const CustomModeScreen({super.key});
@@ -13,25 +14,13 @@ class CustomModeScreen extends StatefulWidget {
 
 class _CustomModeScreenState extends State<CustomModeScreen> {
   final ApiClient _apiClient = ApiClient();
+  final InstalledAppsService _installedAppsService = InstalledAppsService();
 
   String _selectedMode = '';
   final List<String> _modes = [];
   final Map<String, BackendMode> _backendModesByDisplay = {};
 
-  final List<PrioritizableApp> _availableApps = const [
-    PrioritizableApp(name: 'WhatsApp', icon: Icons.chat_bubble_outline, package: 'com.whatsapp'),
-    PrioritizableApp(name: 'Gmail', icon: Icons.mail_outline, package: 'com.google.android.gm'),
-    PrioritizableApp(name: 'Messages', icon: Icons.sms_outlined, package: 'com.google.android.apps.messaging'),
-    PrioritizableApp(name: 'Phone', icon: Icons.call_outlined, package: 'com.android.dialer'),
-    PrioritizableApp(name: 'Instagram', icon: Icons.camera_alt_outlined, package: 'com.instagram.android'),
-    PrioritizableApp(name: 'Slack', icon: Icons.work_outline, package: 'com.Slack'),
-    PrioritizableApp(name: 'Teams', icon: Icons.groups_outlined, package: 'com.microsoft.teams'),
-    PrioritizableApp(name: 'Calendar', icon: Icons.calendar_month_outlined, package: 'com.google.android.calendar'),
-    PrioritizableApp(name: 'Drive', icon: Icons.cloud_outlined, package: 'com.google.android.apps.docs'),
-    PrioritizableApp(name: 'Banking', icon: Icons.account_balance_outlined, package: 'com.banking.app'),
-    PrioritizableApp(name: 'Telegram', icon: Icons.send_outlined, package: 'org.telegram.messenger'),
-    PrioritizableApp(name: 'Discord', icon: Icons.forum_outlined, package: 'com.discord'),
-  ];
+  List<PrioritizableApp> _availableApps = const [];
 
   final Map<String, Set<String>> _prioritizedAppsByMode = {};
   final Map<String, List<PriorityContact>> _contactsByMode = {};
@@ -47,6 +36,17 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
 
   Future<void> _loadData({String? preferredModeDisplay}) async {
     try {
+      final installed = await _installedAppsService.fetchInstalledApps();
+      _availableApps = installed
+          .map(
+            (app) => PrioritizableApp(
+              name: app.name,
+              icon: Icons.apps,
+              package: app.package,
+            ),
+          )
+          .toList(growable: false);
+
       final results = await Future.wait([
         _apiClient.fetchModes(),
         _apiClient.fetchRules(),
@@ -365,7 +365,9 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Tap apps to mark as prioritized for this mode.',
+              _availableApps.isEmpty
+                  ? 'No installed apps detected yet.'
+                  : 'Tap apps to mark as prioritized for this mode.',
               style: TextStyle(color: subtleColor, fontSize: 12, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 12),

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 
@@ -25,8 +24,6 @@ class MainDashboardScreen extends StatefulWidget {
 
 class _MainDashboardScreenState extends State<MainDashboardScreen>
     with SingleTickerProviderStateMixin {
-  final Random _random = Random();
-  Timer? _updatesTimer;
   late final AnimationController _tapWaveController;
   late final ApiClient _apiClient;
   late final WebsocketService _websocketService;
@@ -49,14 +46,12 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
-    _seedInitialNotifications();
     _loadFromBackend();
     _connectWebsocket();
   }
 
   @override
   void dispose() {
-    _updatesTimer?.cancel();
     _wsSubscription?.cancel();
     unawaited(_websocketService.disconnect());
     _tapWaveController.dispose();
@@ -78,7 +73,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
         }
       });
     } catch (_) {
-      _startMockFallbackTimer();
+      // Keep current state when backend is unavailable.
     }
   }
 
@@ -91,43 +86,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
           _notificationsByCategory[category]!.insert(0, notification);
         });
       },
-      onError: (_) {
-        _startMockFallbackTimer();
-      },
-    );
-  }
-
-  void _startMockFallbackTimer() {
-    if (_updatesTimer?.isActive == true) return;
-    _updatesTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      _addIncomingNotification();
-    });
-  }
-
-  void _seedInitialNotifications() {
-    final initialNotifications = [
-      _makeNotification('Card transaction alert', 93, 5),
-      _makeNotification('Missed medication reminder', 88, 8),
-      _makeNotification('Team message: review needed', 74, 3),
-      _makeNotification('Calendar task update', 59, 2),
-      _makeNotification('App update available', 34, 0),
-      _makeNotification('Marketing email summary', 22, 0),
-    ];
-
-    for (final item in initialNotifications) {
-      final category = _categorize(item);
-      _notificationsByCategory[category]!.add(item);
-    }
-  }
-
-  AppNotification _makeNotification(String title, int urgency, int ruleBoost) {
-    final sources = ['Bank', 'Health', 'Work', 'Social', 'System'];
-    return AppNotification(
-      title: title,
-      source: sources[_random.nextInt(sources.length)],
-      urgencyScore: urgency,
-      userRuleBoost: ruleBoost,
-      createdAt: DateTime.now(),
+      onError: (_) {},
     );
   }
 
@@ -137,32 +96,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
     if (finalScore >= 70) return NotificationCategory.highPriority;
     if (finalScore >= 45) return NotificationCategory.medium;
     return NotificationCategory.low;
-  }
-
-  void _addIncomingNotification() {
-    if (!mounted) return;
-
-    final templates = [
-      'Payment due in 1 hour',
-      'Meeting starts in 15 minutes',
-      'Sleep goal reminder',
-      'Delivery arriving soon',
-      'Low battery warning',
-      'Family message waiting',
-    ];
-
-    final urgency = 20 + _random.nextInt(76);
-    final ruleBoost = _random.nextInt(16);
-    final created = _makeNotification(
-      templates[_random.nextInt(templates.length)],
-      urgency,
-      ruleBoost,
-    );
-    final category = _categorize(created);
-
-    setState(() {
-      _notificationsByCategory[category]!.insert(0, created);
-    });
   }
 
   @override
