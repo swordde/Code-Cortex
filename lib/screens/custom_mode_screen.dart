@@ -15,13 +15,19 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
     'College': [
       PriorityContact(name: 'Mom', priority: 'Emergency'),
       PriorityContact(name: 'Professor', priority: 'High'),
+      PriorityContact(name: 'Class Rep', priority: 'Medium'),
+      PriorityContact(name: 'Lab Group', priority: 'Low'),
     ],
     'Office': [
       PriorityContact(name: 'Boss', priority: 'Emergency'),
       PriorityContact(name: 'Client', priority: 'High'),
+      PriorityContact(name: 'Team Lead', priority: 'Medium'),
+      PriorityContact(name: 'Vendor', priority: 'Low'),
     ],
     'Home': [
       PriorityContact(name: 'Family', priority: 'Emergency'),
+      PriorityContact(name: 'Neighbor', priority: 'Medium'),
+      PriorityContact(name: 'Community Group', priority: 'Low'),
     ],
   };
 
@@ -48,7 +54,9 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final accentColor = const Color(0xFF0F4D52);
-    final subtleColor = isDark ? const Color(0xFFAAB4BA) : const Color(0xFF7A8288);
+    final subtleColor = isDark
+        ? const Color(0xFFAAB4BA)
+        : const Color(0xFF7A8288);
 
     final contacts = _contactsByMode[_selectedMode] ?? [];
     final keywords = _keywordsByMode[_selectedMode] ?? [];
@@ -67,9 +75,9 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
             // Mode Selection
             Text(
               'Select Context',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
             SizedBox(
@@ -91,17 +99,10 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                             vertical: 10,
                           ),
                           decoration: BoxDecoration(
-                            border: Border.all(
-                              color: accentColor,
-                              width: 2,
-                            ),
+                            border: Border.all(color: accentColor, width: 2),
                             borderRadius: BorderRadius.circular(24),
                           ),
-                          child: Icon(
-                            Icons.add,
-                            color: accentColor,
-                            size: 20,
-                          ),
+                          child: Icon(Icons.add, color: accentColor, size: 20),
                         ),
                       ),
                     );
@@ -181,7 +182,27 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                   ...contacts.asMap().entries.map((entry) {
                     final idx = entry.key;
                     final contact = entry.value;
-                    final isEmergency = contact.priority == 'Emergency';
+
+                    Color iconColor;
+                    Color tagColor;
+                    switch (contact.priority) {
+                      case 'Emergency':
+                        iconColor = const Color(0xFFFF9500);
+                        tagColor = const Color(0xFFEF5350);
+                        break;
+                      case 'High':
+                        iconColor = const Color(0xFF34A853);
+                        tagColor = const Color(0xFFFFA500);
+                        break;
+                      case 'Medium':
+                        iconColor = const Color(0xFF4F9DA6);
+                        tagColor = const Color(0xFF2E7D7D);
+                        break;
+                      case 'Low':
+                      default:
+                        iconColor = const Color(0xFF9EA7AD);
+                        tagColor = const Color(0xFF7E868C);
+                    }
 
                     return Padding(
                       padding: EdgeInsets.only(
@@ -193,9 +214,7 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                             width: 36,
                             height: 36,
                             decoration: BoxDecoration(
-                              color: isEmergency
-                                  ? const Color(0xFFFF9500)
-                                  : const Color(0xFF34A853),
+                              color: iconColor,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Icon(
@@ -208,12 +227,8 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                           Expanded(
                             child: Text(
                               contact.name,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600),
                             ),
                           ),
                           Container(
@@ -222,9 +237,7 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: isEmergency
-                                  ? const Color(0xFFEF5350)
-                                  : const Color(0xFFFFA500),
+                              color: tagColor,
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -336,7 +349,9 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              keyword.priority == 'Emergency' ? 'Emergency' : 'High',
+                              keyword.priority == 'Emergency'
+                                  ? 'Emergency'
+                                  : 'High',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 11,
@@ -369,11 +384,7 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.add,
-                          size: 14,
-                          color: accentColor,
-                        ),
+                        Icon(Icons.add, size: 14, color: accentColor),
                         const SizedBox(width: 4),
                         Text(
                           'Add',
@@ -395,10 +406,7 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
             Container(
               decoration: BoxDecoration(
                 color: const Color(0xFFFFA500).withValues(alpha: 0.1),
-                border: Border.all(
-                  color: const Color(0xFFFFA500),
-                  width: 1.5,
-                ),
+                border: Border.all(color: const Color(0xFFFFA500), width: 1.5),
                 borderRadius: BorderRadius.circular(10),
               ),
               padding: const EdgeInsets.all(12),
@@ -428,7 +436,9 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                           'Messages from priority contacts or containing keywords will be automatically classified.',
                           style: TextStyle(
                             fontSize: 11,
-                            color: const Color(0xFFFFA500).withValues(alpha: 0.8),
+                            color: const Color(
+                              0xFFFFA500,
+                            ).withValues(alpha: 0.8),
                             height: 1.4,
                           ),
                         ),
@@ -478,10 +488,7 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                   Navigator.pop(context);
                 }
               },
-              child: Text(
-                'Add',
-                style: TextStyle(color: accentColor),
-              ),
+              child: Text('Add', style: TextStyle(color: accentColor)),
             ),
           ],
         );
@@ -516,7 +523,9 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: selectedPriority,
-                    items: ['Emergency', 'High'].map((priority) {
+                    items: ['Emergency', 'High', 'Medium', 'Low'].map((
+                      priority,
+                    ) {
                       return DropdownMenuItem(
                         value: priority,
                         child: Text(priority),
@@ -554,10 +563,7 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                       Navigator.pop(context);
                     }
                   },
-                  child: Text(
-                    'Add',
-                    style: TextStyle(color: accentColor),
-                  ),
+                  child: Text('Add', style: TextStyle(color: accentColor)),
                 ),
               ],
             );
@@ -632,10 +638,7 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                       Navigator.pop(context);
                     }
                   },
-                  child: Text(
-                    'Add',
-                    style: TextStyle(color: accentColor),
-                  ),
+                  child: Text('Add', style: TextStyle(color: accentColor)),
                 ),
               ],
             );
@@ -650,18 +653,12 @@ class PriorityContact {
   final String name;
   final String priority;
 
-  PriorityContact({
-    required this.name,
-    required this.priority,
-  });
+  PriorityContact({required this.name, required this.priority});
 }
 
 class KeywordRule {
   final String keyword;
   final String priority;
 
-  KeywordRule({
-    required this.keyword,
-    required this.priority,
-  });
+  KeywordRule({required this.keyword, required this.priority});
 }

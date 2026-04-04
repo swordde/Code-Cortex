@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'screens/main_dashboard_screen.dart';
+import 'screens/landing_screen.dart';
 
 class CortexApp extends StatelessWidget {
   const CortexApp({super.key});
@@ -23,7 +23,7 @@ class CortexApp extends StatelessWidget {
         useMaterial3: true,
       ),
       themeMode: ThemeMode.system,
-      home: const MainDashboardScreen(),
+      home: const LandingScreen(),
     );
   }
 }
