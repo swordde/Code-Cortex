@@ -5,17 +5,27 @@ class WellbeingSection extends StatelessWidget {
     super.key,
     required this.total,
     required this.urgent,
-    required this.weeklyDeltaPercent,
+    required this.highPriority,
+    required this.medium,
+    required this.low,
+    required this.deltaPercent,
     required this.isDark,
   });
 
   final int total;
   final int urgent;
-  final int weeklyDeltaPercent;
+  final int highPriority;
+  final int medium;
+  final int low;
+  final int deltaPercent;
   final bool isDark;
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final maxCount = [urgent, highPriority, medium, low].reduce(
+      (value, element) => value > element ? value : element,
+    );
     final panel = const Color(0xFF0F4D52);
     final surface = isDark ? const Color(0xFF23262A) : Colors.white;
     final softText = isDark ? const Color(0xFFB8C0C2) : const Color(0xFF7B8086);
@@ -97,7 +107,7 @@ class WellbeingSection extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          'Saturday, April 5th',
+          _formatLongDate(now),
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             color: mainText,
             fontWeight: FontWeight.w800,
@@ -115,7 +125,7 @@ class WellbeingSection extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Notification Load · 7 days',
+                'Current Notification Mix',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.65),
                   fontWeight: FontWeight.w600,
@@ -125,25 +135,25 @@ class WellbeingSection extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 crossAxisAlignment: CrossAxisAlignment.end,
-                children: const [
+                children: [
                   _BarColumn(
                     label: 'EMG',
-                    height: 32,
+                    height: _barHeight(urgent, maxCount),
                     color: Color(0xFFF2DFDF),
                   ),
                   _BarColumn(
                     label: 'HIGH',
-                    height: 54,
+                    height: _barHeight(highPriority, maxCount),
                     color: Color(0xFFF4AD2B),
                   ),
                   _BarColumn(
                     label: 'MED',
-                    height: 68,
+                    height: _barHeight(medium, maxCount),
                     color: Color(0xFF8DB8B8),
                   ),
                   _BarColumn(
                     label: 'LOW',
-                    height: 76,
+                    height: _barHeight(low, maxCount),
                     color: Color(0xFF5A8C89),
                   ),
                 ],
@@ -166,8 +176,8 @@ class WellbeingSection extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: _StatCard(
-                title: '$weeklyDeltaPercent%',
-                subtitle: 'vs last week',
+                title: '${deltaPercent >= 0 ? '+' : ''}$deltaPercent%',
+                subtitle: 'since open',
                 titleColor: const Color(0xFFE08C00),
                 background: surface,
                 subtitleColor: softText,
@@ -195,7 +205,7 @@ class WellbeingSection extends StatelessWidget {
           ),
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           child: Text(
-            'AI Insight\nYou saved 2.1 hrs this week by reducing low-priority checks.',
+            _insightText(),
             style: TextStyle(
               color: isDark ? const Color(0xFFF5DB9A) : const Color(0xFF8A5A10),
               fontWeight: FontWeight.w600,
@@ -205,6 +215,69 @@ class WellbeingSection extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  static double _barHeight(int count, int maxCount) {
+    if (maxCount <= 0) return 32;
+    const minHeight = 24.0;
+    const range = 60.0;
+    return minHeight + (count / maxCount) * range;
+  }
+
+  String _insightText() {
+    if (total == 0) {
+      return 'AI Insight\nNo notifications yet. Live stats appear as notifications arrive.';
+    }
+
+    final buckets = <String, int>{
+      'Emergency': urgent,
+      'High': highPriority,
+      'Medium': medium,
+      'Low': low,
+    };
+    final top = buckets.entries.reduce((a, b) => a.value >= b.value ? a : b);
+    return 'AI Insight\nMost incoming notifications are ${top.key.toLowerCase()} priority right now.';
+  }
+
+  String _formatLongDate(DateTime date) {
+    const days = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+
+    final dayName = days[date.weekday - 1];
+    final monthName = months[date.month - 1];
+    final suffix = _daySuffix(date.day);
+    return '$dayName, $monthName ${date.day}$suffix';
+  }
+
+  String _daySuffix(int day) {
+    if (day >= 11 && day <= 13) return 'th';
+    return switch (day % 10) {
+      1 => 'st',
+      2 => 'nd',
+      3 => 'rd',
+      _ => 'th',
+    };
   }
 }
 

@@ -19,7 +19,17 @@ class WebsocketService {
           final parsed = jsonDecode(event as String);
           if (parsed is! Map<String, dynamic>) return;
 
-          final type = parsed['type'];
+          final directNotificationPayload =
+              (parsed.containsKey('content') && parsed.containsKey('app_name'))
+              ? parsed
+              : null;
+
+          if (directNotificationPayload != null) {
+            controller.add(AppNotification.fromBackendJson(directNotificationPayload));
+            return;
+          }
+
+          final type = (parsed['type'] as String?)?.toUpperCase() ?? '';
           if (type != 'NEW_NOTIFICATION') return;
 
           final payload = parsed['payload'];

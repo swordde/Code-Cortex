@@ -23,11 +23,13 @@ class MainDashboardScreen extends StatefulWidget {
 }
 
 class _MainDashboardScreenState extends State<MainDashboardScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _tapWaveController;
   late final ApiClient _apiClient;
   late final WebsocketService _websocketService;
   StreamSubscription<AppNotification>? _wsSubscription;
+  Timer? _pollTimer;
+  int? _baselineTotal;
 
   final Map<NotificationCategory, List<AppNotification>>
   _notificationsByCategory = {
@@ -40,6 +42,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _apiClient = ApiClient();
     _websocketService = WebsocketService();
     _tapWaveController = AnimationController(
@@ -48,14 +51,27 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
     );
     _loadFromBackend();
     _connectWebsocket();
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _loadFromBackend(),
+    );
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _wsSubscription?.cancel();
+    _pollTimer?.cancel();
     unawaited(_websocketService.disconnect());
     _tapWaveController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadFromBackend();
+    }
   }
 
   Future<void> _loadFromBackend() async {
@@ -78,16 +94,45 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
   }
 
   void _connectWebsocket() {
+    _wsSubscription?.cancel();
     _wsSubscription = _websocketService.connect().listen(
       (notification) {
         if (!mounted) return;
-        final category = _categorize(notification);
-        setState(() {
-          _notificationsByCategory[category]!.insert(0, notification);
+        _insertNotification(notification);
+        unawaited(_loadFromBackend());
+      },
+      onError: (_) {
+        if (!mounted) return;
+        Future<void>.delayed(const Duration(seconds: 2), () {
+          if (!mounted) return;
+          _connectWebsocket();
         });
       },
-      onError: (_) {},
+      onDone: () {
+        if (!mounted) return;
+        Future<void>.delayed(const Duration(seconds: 2), () {
+          if (!mounted) return;
+          _connectWebsocket();
+        });
+      },
     );
+  }
+
+  void _insertNotification(AppNotification notification) {
+    final category = _categorize(notification);
+    final key = _notificationKey(notification);
+    final existing = _notificationsByCategory.values.expand((e) => e).any(
+      (item) => _notificationKey(item) == key,
+    );
+    if (existing) return;
+
+    setState(() {
+      _notificationsByCategory[category]!.insert(0, notification);
+    });
+  }
+
+  String _notificationKey(AppNotification n) {
+    return '${n.source}|${n.title}|${n.createdAt.toIso8601String()}';
   }
 
   NotificationCategory _categorize(AppNotification notification) {
@@ -110,6 +155,10 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
     final lowCount = _notificationsByCategory[NotificationCategory.low]!.length;
     final needingAttention = emergencyCount + highCount;
     final total = emergencyCount + highCount + mediumCount + lowCount;
+    _baselineTotal ??= total;
+    final baseline = _baselineTotal;
+    final sessionDeltaPercent =
+      (baseline == null || baseline <= 0) ? 0 : (((total - baseline) * 100) / baseline).round();
     final focusPercent = total == 0
         ? 0.0
         : ((emergencyCount * 1.0 + highCount * 0.75 + mediumCount * 0.45) /
@@ -277,7 +326,10 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
                   WellbeingSection(
                     total: total,
                     urgent: emergencyCount,
-                    weeklyDeltaPercent: -23,
+                    highPriority: highCount,
+                    medium: mediumCount,
+                    low: lowCount,
+                    deltaPercent: sessionDeltaPercent,
                     isDark: isDark,
                   ),
                 ],
