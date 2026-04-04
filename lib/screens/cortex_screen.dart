@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/api_client.dart';
+
 class CortexScreen extends StatefulWidget {
   const CortexScreen({super.key});
 
@@ -8,36 +10,61 @@ class CortexScreen extends StatefulWidget {
 }
 
 class _CortexScreenState extends State<CortexScreen> {
-  bool _autoReplyEnabled = true;
-  List<String> _savedReplies = [
-    'I\'ll call you back shortly',
-    'In a meeting, will respond later',
-    'On my way!',
-  ];
+  final ApiClient _apiClient = ApiClient();
 
-  final List<ScheduledMessage> _scheduledMessages = [
-    ScheduledMessage(
-      title: 'Goodnight - family',
-      subtitle: 'Every day',
-      time: '9:30 PM',
-      icon: Icons.nights_stay,
-    ),
-    ScheduledMessage(
-      title: 'Morning check-in',
-      subtitle: 'Weekdays',
-      time: '7:00 AM',
-      icon: Icons.wb_sunny,
-    ),
-  ];
+  bool _autoReplyEnabled = false;
+  bool _cortexEnabled = false;
+  bool _loading = true;
+
+  List<BackendReplyTemplate> _savedReplies = [];
+  List<BackendScheduledMessage> _scheduledMessages = [];
+  List<BackendActivityEntry> _activity = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final cfg = await _apiClient.fetchCortexConfig();
+      final replies = await _apiClient.fetchReplyTemplates();
+      final scheduled = await _apiClient.fetchScheduledMessages();
+      final activity = await _apiClient.fetchCortexActivity();
+
+      if (!mounted) return;
+      setState(() {
+        _cortexEnabled = cfg.enabled;
+        _autoReplyEnabled = cfg.autoReply;
+        _savedReplies = replies;
+        _scheduledMessages = scheduled;
+        _activity = activity;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to load Cortex data from backend.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surfaceColor = isDark ? const Color(0xFF1D2225) : Colors.white;
     final accentColor = const Color(0xFF0F4D52);
-    final subtleColor = isDark
-        ? const Color(0xFFAAB4BA)
-        : const Color(0xFF7A8288);
+    final subtleColor = isDark ? const Color(0xFFAAB4BA) : const Color(0xFF7A8288);
+
+    if (_loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -50,7 +77,6 @@ class _CortexScreenState extends State<CortexScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header description
             Padding(
               padding: const EdgeInsets.only(bottom: 24),
               child: Text(
@@ -61,8 +87,6 @@ class _CortexScreenState extends State<CortexScreen> {
                 ),
               ),
             ),
-
-            // Auto Reply Section
             Container(
               decoration: BoxDecoration(
                 color: surfaceColor,
@@ -90,24 +114,23 @@ class _CortexScreenState extends State<CortexScreen> {
                   ),
                   Switch(
                     value: _autoReplyEnabled,
-                    onChanged: (value) {
-                      setState(() {
-                        _autoReplyEnabled = value;
-                      });
-                    },
-                    activeColor: accentColor,
+                    onChanged: (value) => _updateAutoReply(value),
+                    activeThumbColor: accentColor,
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 8),
+            Text(
+              _cortexEnabled
+                  ? 'Cortex is enabled on backend'
+                  : 'Cortex is disabled on backend',
+              style: TextStyle(color: subtleColor, fontSize: 12),
+            ),
             const SizedBox(height: 24),
-
-            // Saved Replies Section
             Text(
               'Saved Replies',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
             ..._savedReplies.map((reply) {
@@ -118,10 +141,7 @@ class _CortexScreenState extends State<CortexScreen> {
                     color: surfaceColor,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   child: Row(
                     children: [
                       Container(
@@ -136,23 +156,16 @@ class _CortexScreenState extends State<CortexScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          reply,
+                          reply.body,
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(fontWeight: FontWeight.w500),
                         ),
                       ),
                       IconButton(
-                        onPressed: () {
-                          setState(() {
-                            _savedReplies.remove(reply);
-                          });
-                        },
+                        onPressed: () => _deleteReply(reply),
                         icon: Icon(Icons.close, size: 18, color: subtleColor),
                         padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 32,
-                          minHeight: 32,
-                        ),
+                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                       ),
                     ],
                   ),
@@ -161,40 +174,31 @@ class _CortexScreenState extends State<CortexScreen> {
             }),
             const SizedBox(height: 12),
             InkWell(
-              onTap: () {
-                _showAddReplyDialog(context);
-              },
+              onTap: () => _showAddReplyDialog(context),
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 child: Row(
                   children: [
                     Icon(Icons.add, color: accentColor, size: 20),
                     const SizedBox(width: 8),
                     Text(
                       'Add Reply',
-                      style: TextStyle(
-                        color: accentColor,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: TextStyle(color: accentColor, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 24),
-
-            // Scheduled Messages Section
             Text(
               'Scheduled Messages',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
             ..._scheduledMessages.map((message) {
+              final timeText = message.scheduledAt == null
+                  ? '--'
+                  : TimeOfDay.fromDateTime(message.scheduledAt!.toLocal()).format(context);
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Container(
@@ -202,10 +206,7 @@ class _CortexScreenState extends State<CortexScreen> {
                     color: surfaceColor,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   child: Row(
                     children: [
                       Container(
@@ -215,7 +216,7 @@ class _CortexScreenState extends State<CortexScreen> {
                           color: accentColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Icon(message.icon, size: 20, color: accentColor),
+                        child: Icon(Icons.schedule, size: 20, color: accentColor),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -223,56 +224,114 @@ class _CortexScreenState extends State<CortexScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              message.title,
+                              message.draftBody.isEmpty ? 'Scheduled reply' : message.draftBody,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.bodyMedium
                                   ?.copyWith(fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              message.subtitle,
-                              style: TextStyle(
-                                color: subtleColor,
-                                fontSize: 12,
-                              ),
+                              message.status,
+                              style: TextStyle(color: subtleColor, fontSize: 12),
                             ),
                           ],
                         ),
                       ),
                       Text(
-                        message.time,
+                        timeText,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: accentColor,
                           fontWeight: FontWeight.w700,
                         ),
+                      ),
+                      IconButton(
+                        onPressed: () => _approveScheduled(message),
+                        icon: const Icon(Icons.check_circle_outline),
+                      ),
+                      IconButton(
+                        onPressed: () => _cancelScheduled(message),
+                        icon: const Icon(Icons.cancel_outlined),
                       ),
                     ],
                   ),
                 ),
               );
             }),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  _showAddScheduledMessageDialog(context);
-                },
-                icon: const Icon(Icons.add),
-                label: const Text('Add Scheduled Message'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accentColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
+            const SizedBox(height: 16),
+            Text(
+              'Recent Cortex Activity: ${_activity.length}',
+              style: TextStyle(color: subtleColor, fontSize: 12, fontWeight: FontWeight.w600),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _updateAutoReply(bool value) async {
+    final next = BackendCortexConfig(
+      enabled: value || _cortexEnabled,
+      autoReply: value,
+      scope: 'global',
+    );
+    setState(() {
+      _autoReplyEnabled = value;
+      _cortexEnabled = next.enabled;
+    });
+    try {
+      await _apiClient.updateCortexConfig(next);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to update auto-reply.')),
+      );
+    }
+  }
+
+  Future<void> _deleteReply(BackendReplyTemplate reply) async {
+    try {
+      await _apiClient.deleteReplyTemplate(reply.id);
+      if (!mounted) return;
+      setState(() {
+        _savedReplies.removeWhere((r) => r.id == reply.id);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to delete reply.')),
+      );
+    }
+  }
+
+  Future<void> _approveScheduled(BackendScheduledMessage message) async {
+    try {
+      await _apiClient.approveScheduledMessage(message.id);
+      if (!mounted) return;
+      setState(() {
+        _scheduledMessages.removeWhere((m) => m.id == message.id);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to approve scheduled message.')),
+      );
+    }
+  }
+
+  Future<void> _cancelScheduled(BackendScheduledMessage message) async {
+    try {
+      await _apiClient.cancelScheduledMessage(message.id);
+      if (!mounted) return;
+      setState(() {
+        _scheduledMessages.removeWhere((m) => m.id == message.id);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to cancel scheduled message.')),
+      );
+    }
   }
 
   void _showAddReplyDialog(BuildContext context) {
@@ -300,12 +359,21 @@ class _CortexScreenState extends State<CortexScreen> {
               child: const Text('Cancel'),
             ),
             TextButton(
-              onPressed: () {
-                if (controller.text.isNotEmpty) {
+              onPressed: () async {
+                final text = controller.text.trim();
+                if (text.isEmpty) return;
+                Navigator.pop(context);
+                try {
+                  final created = await _apiClient.createReplyTemplate(body: text);
+                  if (!mounted) return;
                   setState(() {
-                    _savedReplies.add(controller.text);
+                    _savedReplies.add(created);
                   });
-                  Navigator.pop(context);
+                } catch (_) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    const SnackBar(content: Text('Failed to add reply template.')),
+                  );
                 }
               },
               child: Text('Add', style: TextStyle(color: accentColor)),
@@ -315,82 +383,4 @@ class _CortexScreenState extends State<CortexScreen> {
       },
     );
   }
-
-  void _showAddScheduledMessageDialog(BuildContext context) {
-    final titleController = TextEditingController();
-    final timeController = TextEditingController();
-    final accentColor = const Color(0xFF0F4D52);
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Add Scheduled Message'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                decoration: InputDecoration(
-                  hintText: 'Message title',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: timeController,
-                decoration: InputDecoration(
-                  hintText: 'Time (e.g., 9:30 PM)',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                if (titleController.text.isNotEmpty &&
-                    timeController.text.isNotEmpty) {
-                  setState(() {
-                    _scheduledMessages.add(
-                      ScheduledMessage(
-                        title: titleController.text,
-                        subtitle: 'Every day',
-                        time: timeController.text,
-                        icon: Icons.schedule,
-                      ),
-                    );
-                  });
-                  Navigator.pop(context);
-                }
-              },
-              child: Text('Add', style: TextStyle(color: accentColor)),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class ScheduledMessage {
-  final String title;
-  final String subtitle;
-  final String time;
-  final IconData icon;
-
-  ScheduledMessage({
-    required this.title,
-    required this.subtitle,
-    required this.time,
-    required this.icon,
-  });
 }

@@ -36,8 +36,48 @@ class BackendEndpoints {
   static Uri get notificationsUri =>
       Uri.parse('http://$host:$port/api/notifications');
 
+    static Uri notificationByIdUri(String id) =>
+      Uri.parse('http://$host:$port/api/notifications/$id');
+
+    static Uri get modesUri => Uri.parse('http://$host:$port/api/modes');
+
+    static Uri modeByIdUri(String id) => Uri.parse('http://$host:$port/api/modes/$id');
+
+    static Uri activateModeUri(String id) =>
+      Uri.parse('http://$host:$port/api/modes/$id/activate');
+
+    static Uri get rulesUri => Uri.parse('http://$host:$port/api/rules');
+
+    static Uri ruleByIdUri(String id) => Uri.parse('http://$host:$port/api/rules/$id');
+
+    static Uri get reorderRulesUri =>
+      Uri.parse('http://$host:$port/api/rules/reorder');
+
+    static Uri get cortexConfigUri =>
+      Uri.parse('http://$host:$port/api/cortex/config');
+
+    static Uri get cortexRepliesUri =>
+      Uri.parse('http://$host:$port/api/cortex/replies');
+
+    static Uri cortexReplyByIdUri(String id) =>
+      Uri.parse('http://$host:$port/api/cortex/replies/$id');
+
+    static Uri get cortexScheduledUri =>
+      Uri.parse('http://$host:$port/api/cortex/scheduled');
+
+    static Uri approveScheduledUri(String id) =>
+      Uri.parse('http://$host:$port/api/cortex/scheduled/$id/approve');
+
+    static Uri cancelScheduledUri(String id) =>
+      Uri.parse('http://$host:$port/api/cortex/scheduled/$id');
+
+    static Uri get cortexActivityUri =>
+      Uri.parse('http://$host:$port/api/cortex/activity');
+
   static Uri get voiceEnrollUri =>
       Uri.parse('http://$host:$port/api/cortex/voice/enroll');
+
+    static Uri get profileUri => Uri.parse('http://$host:$port/api/profile');
 
   static Uri get websocketUri => Uri.parse('ws://$host:$port/ws');
 }

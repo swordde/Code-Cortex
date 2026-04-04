@@ -22,6 +22,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   final ApiClient _apiClient = ApiClient();
   Timer? _recordTimer;
+  BackendUserProfile? _profile;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBackendState();
+  }
 
   @override
   void dispose() {
@@ -44,7 +52,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: AnimatedBuilder(
           animation: _store,
           builder: (context, _) {
-            final displayName = _store.userName;
+            if (_loading) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final displayName = (_profile?.displayName.isNotEmpty ?? false)
+                ? _profile!.displayName
+                : _store.userName;
             final primaryVoice = _store.primaryVoice;
             final extraVoices = _store.voices
                 .where((voice) => !voice.isPrimary)
@@ -213,11 +227,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         Switch(
                           value: _cortexModeEnabled,
-                          onChanged: (value) {
-                            setState(() {
-                              _cortexModeEnabled = value;
-                            });
-                          },
+                          onChanged: _setCortexEnabled,
                         ),
                       ],
                     ),
@@ -391,5 +401,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _isPlayingVoice = false;
       });
     });
+  }
+
+  Future<void> _loadBackendState() async {
+    try {
+      final profile = await _apiClient.fetchProfile();
+      final cortex = await _apiClient.fetchCortexConfig();
+      if (!mounted) return;
+      _store.setUserName(profile.displayName.isEmpty ? _store.userName : profile.displayName);
+      setState(() {
+        _profile = profile;
+        _cortexModeEnabled = cortex.enabled;
+      });
+    } catch (_) {
+      // fallback to local store when backend call fails
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _setCortexEnabled(bool value) async {
+    setState(() {
+      _cortexModeEnabled = value;
+    });
+    try {
+      await _apiClient.updateCortexConfig(
+        BackendCortexConfig(enabled: value, autoReply: value, scope: 'global'),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to update cortex mode.')),
+      );
+    }
   }
 }

@@ -33,6 +33,11 @@ class UserProfileStore extends ChangeNotifier {
     return null;
   }
 
+  void setUserName(String value) {
+    _userName = value;
+    notifyListeners();
+  }
+
   void createAccount({
     required String name,
     required int durationSeconds,

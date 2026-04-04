@@ -154,6 +154,18 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       filePath: _recordedFilePath,
     );
 
+    unawaited(
+      _apiClient.updateProfile(
+        BackendUserProfile(
+          displayName: trimmedName,
+          avatarPath: '',
+          notifPermission: true,
+          themeMode: 'system',
+          linkedAccounts: const [],
+        ),
+      ),
+    );
+
     if (_recordedFilePath != null) {
       unawaited(
         _apiClient.enrollVoiceSample(
