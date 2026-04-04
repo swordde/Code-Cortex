@@ -4,6 +4,8 @@ Go backend aligned to SNP backend spec with MongoDB Atlas persistence.
 
 Detailed documentation: [BACKEND_DOCUMENTATION.md](BACKEND_DOCUMENTATION.md)
 
+Mongo setup guide: [MONGODB_ATLAS_SETUP.md](MONGODB_ATLAS_SETUP.md)
+
 ## Implemented modules
 
 - Notification ingestion + classification + rule override pipeline
@@ -19,7 +21,7 @@ Detailed documentation: [BACKEND_DOCUMENTATION.md](BACKEND_DOCUMENTATION.md)
 ```bash
 cd backend
 go mod tidy
-go run ./cmd/server
+./scripts/run_backend.sh
 ```
 
 Server defaults to `:8080`.
