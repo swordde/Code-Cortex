@@ -174,6 +174,22 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
     setState(() {
       _notificationsByCategory[category]!.insert(0, notification);
     });
+    _showNotificationPopup(notification);
+  }
+
+  void _showNotificationPopup(AppNotification notification) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        content: Text('${notification.source}: ${notification.title}'),
+      ),
+    );
   }
 
   String _notificationKey(AppNotification n) {

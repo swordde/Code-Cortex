@@ -21,15 +21,16 @@ class MainActivity : FlutterActivity() {
 				when (call.method) {
 					"getInstalledApps" -> {
 						try {
-							val launcherIntent = Intent(Intent.ACTION_MAIN, null).apply {
-								addCategory(Intent.CATEGORY_LAUNCHER)
-							}
 							val apps = packageManager
-								.queryIntentActivities(launcherIntent, 0)
-								.map {
+								.getInstalledApplications(0)
+								.filter { appInfo ->
+									appInfo.packageName != applicationContext.packageName &&
+										packageManager.getLaunchIntentForPackage(appInfo.packageName) != null
+								}
+								.map { appInfo ->
 									mapOf(
-										"name" to it.loadLabel(packageManager).toString(),
-										"package" to it.activityInfo.packageName
+										"name" to packageManager.getApplicationLabel(appInfo).toString(),
+										"package" to appInfo.packageName
 									)
 								}
 								.distinctBy { it["package"] }
