@@ -3,6 +3,8 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../core/api_client.dart';
+import '../core/websocket_service.dart';
 import '../models/app_notification.dart';
 import '../widgets/ai_orb_fab.dart';
 import '../widgets/priority_card.dart';
@@ -24,8 +26,11 @@ class MainDashboardScreen extends StatefulWidget {
 class _MainDashboardScreenState extends State<MainDashboardScreen>
     with SingleTickerProviderStateMixin {
   final Random _random = Random();
-  late final Timer _updatesTimer;
+  Timer? _updatesTimer;
   late final AnimationController _tapWaveController;
+  late final ApiClient _apiClient;
+  late final WebsocketService _websocketService;
+  StreamSubscription<AppNotification>? _wsSubscription;
 
   final Map<NotificationCategory, List<AppNotification>>
   _notificationsByCategory = {
@@ -38,21 +43,65 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
   @override
   void initState() {
     super.initState();
+    _apiClient = ApiClient();
+    _websocketService = WebsocketService();
     _tapWaveController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
     _seedInitialNotifications();
-    _updatesTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      _addIncomingNotification();
-    });
+    _loadFromBackend();
+    _connectWebsocket();
   }
 
   @override
   void dispose() {
-    _updatesTimer.cancel();
+    _updatesTimer?.cancel();
+    _wsSubscription?.cancel();
+    unawaited(_websocketService.disconnect());
     _tapWaveController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadFromBackend() async {
+    try {
+      final backendItems = await _apiClient.fetchNotifications();
+      if (!mounted) return;
+
+      setState(() {
+        for (final key in _notificationsByCategory.keys) {
+          _notificationsByCategory[key]!.clear();
+        }
+        for (final item in backendItems) {
+          final category = _categorize(item);
+          _notificationsByCategory[category]!.add(item);
+        }
+      });
+    } catch (_) {
+      _startMockFallbackTimer();
+    }
+  }
+
+  void _connectWebsocket() {
+    _wsSubscription = _websocketService.connect().listen(
+      (notification) {
+        if (!mounted) return;
+        final category = _categorize(notification);
+        setState(() {
+          _notificationsByCategory[category]!.insert(0, notification);
+        });
+      },
+      onError: (_) {
+        _startMockFallbackTimer();
+      },
+    );
+  }
+
+  void _startMockFallbackTimer() {
+    if (_updatesTimer?.isActive == true) return;
+    _updatesTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _addIncomingNotification();
+    });
   }
 
   void _seedInitialNotifications() {
