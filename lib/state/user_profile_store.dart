@@ -5,11 +5,13 @@ class VoiceSample {
     required this.label,
     required this.durationSeconds,
     required this.isPrimary,
+    this.filePath,
   });
 
   final String label;
   final int durationSeconds;
   final bool isPrimary;
+  final String? filePath;
 }
 
 class UserProfileStore extends ChangeNotifier {
@@ -31,7 +33,11 @@ class UserProfileStore extends ChangeNotifier {
     return null;
   }
 
-  void createAccount({required String name, required int durationSeconds}) {
+  void createAccount({
+    required String name,
+    required int durationSeconds,
+    String? filePath,
+  }) {
     _userName = name;
     _voices
       ..clear()
@@ -40,17 +46,23 @@ class UserProfileStore extends ChangeNotifier {
           label: 'Primary voice',
           durationSeconds: durationSeconds,
           isPrimary: true,
+          filePath: filePath,
         ),
       );
     notifyListeners();
   }
 
-  void addExtraVoice({required String label, required int durationSeconds}) {
+  void addExtraVoice({
+    required String label,
+    required int durationSeconds,
+    String? filePath,
+  }) {
     _voices.add(
       VoiceSample(
         label: label,
         durationSeconds: durationSeconds,
         isPrimary: false,
+        filePath: filePath,
       ),
     );
     notifyListeners();

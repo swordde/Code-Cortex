@@ -36,5 +36,8 @@ class BackendEndpoints {
   static Uri get notificationsUri =>
       Uri.parse('http://$host:$port/api/notifications');
 
+  static Uri get voiceEnrollUri =>
+      Uri.parse('http://$host:$port/api/cortex/voice/enroll');
+
   static Uri get websocketUri => Uri.parse('ws://$host:$port/ws');
 }

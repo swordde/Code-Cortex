@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -25,5 +26,31 @@ class ApiClient {
         .whereType<Map<String, dynamic>>()
         .map(AppNotification.fromBackendJson)
         .toList();
+  }
+
+  Future<void> enrollVoiceSample({
+    required String filePath,
+    required String label,
+  }) async {
+    final file = File(filePath);
+    if (!await file.exists()) return;
+
+    final bytes = await file.readAsBytes();
+    final payload = {
+      'label': label,
+      'audio_base64': base64Encode(bytes),
+      'format': 'm4a',
+      'recorded_at': DateTime.now().toUtc().toIso8601String(),
+    };
+
+    final response = await _client.post(
+      BackendEndpoints.voiceEnrollUri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode < 200 || response.statusCode > 299) {
+      throw Exception('Voice enroll failed (${response.statusCode})');
+    }
   }
 }

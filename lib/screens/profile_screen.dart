@@ -1,5 +1,10 @@
+import 'dart:async';
+
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 
+import '../core/api_client.dart';
+import '../core/voice_recorder_service.dart';
 import '../state/user_profile_store.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -13,6 +18,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _cortexModeEnabled = true;
   bool _isPlayingVoice = false;
   final UserProfileStore _store = UserProfileStore.instance;
+  final VoiceRecorderService _recorderService = VoiceRecorderService();
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  final ApiClient _apiClient = ApiClient();
+  Timer? _recordTimer;
+
+  @override
+  void dispose() {
+    _recordTimer?.cancel();
+    unawaited(_audioPlayer.dispose());
+    unawaited(_recorderService.dispose());
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -83,11 +100,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             IconButton.filledTonal(
                               onPressed: primaryVoice == null
                                   ? null
-                                  : () {
-                                      setState(() {
-                                        _isPlayingVoice = !_isPlayingVoice;
-                                      });
-                                    },
+                                  : () => _togglePlayback(primaryVoice),
                               icon: Icon(
                                 _isPlayingVoice
                                     ? Icons.pause
@@ -100,7 +113,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 borderRadius: BorderRadius.circular(10),
                                 child: LinearProgressIndicator(
                                   minHeight: 9,
-                                  value: _isPlayingVoice ? 0.55 : 0.0,
+                                  value: _isPlayingVoice ? null : 0.0,
                                   backgroundColor: isDark
                                       ? const Color(0xFF2E3338)
                                       : const Color(0xFFE8ECEE),
@@ -224,25 +237,96 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _addVoice() async {
     final controller = TextEditingController();
-    final label = await showDialog<String>(
+    final result = await showDialog<(String, String?)>(
       context: context,
       builder: (context) {
+        bool isRecording = false;
+        int elapsed = 0;
+        Timer? timer;
+        String? recordedPath;
+
+        Future<void> stopRec(StateSetter setModalState) async {
+          timer?.cancel();
+          final path = await _recorderService.stopRecording();
+          setModalState(() {
+            isRecording = false;
+            recordedPath = path ?? recordedPath;
+            elapsed = elapsed.clamp(1, 10);
+          });
+        }
+
         return AlertDialog(
           title: const Text('Add Voice'),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(
-              hintText: 'Voice label (e.g., Mom, Teammate)',
-            ),
+          content: StatefulBuilder(
+            builder: (context, setModalState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controller,
+                    decoration: const InputDecoration(
+                      hintText: 'Voice label (e.g., Mom, Teammate)',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: () async {
+                      if (isRecording) {
+                        await stopRec(setModalState);
+                        return;
+                      }
+                      final hasPermission =
+                          await _recorderService.hasPermission();
+                      if (!hasPermission) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Microphone permission is required.'),
+                          ),
+                        );
+                        return;
+                      }
+                      recordedPath = await _recorderService.startRecording(
+                        filePrefix: 'extra-voice',
+                      );
+                      setModalState(() {
+                        isRecording = true;
+                        elapsed = 0;
+                      });
+                      timer?.cancel();
+                      timer = Timer.periodic(const Duration(seconds: 1), (
+                        t,
+                      ) async {
+                        final next = elapsed + 1;
+                        setModalState(() => elapsed = next);
+                        if (next >= 10) {
+                          await stopRec(setModalState);
+                        }
+                      });
+                    },
+                    icon: Icon(isRecording ? Icons.stop : Icons.mic),
+                    label: Text(
+                      isRecording
+                          ? 'Stop Recording (${elapsed}s/10s)'
+                          : 'Record 10s Voice',
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                timer?.cancel();
+                Navigator.pop(context);
+              },
               child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () {
-                Navigator.pop(context, controller.text.trim());
+                timer?.cancel();
+                Navigator.pop(context, (controller.text.trim(), recordedPath));
               },
               child: const Text('Record + Save 10s'),
             ),
@@ -252,14 +336,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     controller.dispose();
 
-    if (label == null) return;
+    if (result == null) return;
+    final label = result.$1;
+    final filePath = result.$2;
+
+    if (filePath == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please record voice before saving.')),
+      );
+      return;
+    }
+
     final safeLabel = label.isEmpty
         ? 'Extra voice ${_store.voices.length}'
         : label;
-    _store.addExtraVoice(label: safeLabel, durationSeconds: 10);
+    _store.addExtraVoice(
+      label: safeLabel,
+      durationSeconds: 10,
+      filePath: filePath,
+    );
+
+    unawaited(
+      _apiClient.enrollVoiceSample(filePath: filePath, label: safeLabel),
+    );
+
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('$safeLabel voice added.')));
+  }
+
+  Future<void> _togglePlayback(VoiceSample? voice) async {
+    if (voice == null || voice.filePath == null) return;
+
+    if (_isPlayingVoice) {
+      await _audioPlayer.pause();
+      if (!mounted) return;
+      setState(() {
+        _isPlayingVoice = false;
+      });
+      return;
+    }
+
+    await _audioPlayer.play(DeviceFileSource(voice.filePath!));
+    if (!mounted) return;
+    setState(() {
+      _isPlayingVoice = true;
+    });
+
+    _audioPlayer.onPlayerComplete.listen((_) {
+      if (!mounted) return;
+      setState(() {
+        _isPlayingVoice = false;
+      });
+    });
   }
 }

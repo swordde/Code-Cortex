@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../core/api_client.dart';
+import '../core/voice_recorder_service.dart';
 import '../state/user_profile_store.dart';
 import 'main_dashboard_screen.dart';
 
@@ -12,10 +16,18 @@ class CreateAccountScreen extends StatefulWidget {
 
 class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final TextEditingController _nameController = TextEditingController();
+  final VoiceRecorderService _recorderService = VoiceRecorderService();
+  final ApiClient _apiClient = ApiClient();
   bool _voiceRecorded = false;
+  bool _isRecording = false;
+  int _recordedDuration = 0;
+  String? _recordedFilePath;
+  Timer? _timer;
 
   @override
   void dispose() {
+    _timer?.cancel();
+    unawaited(_recorderService.dispose());
     _nameController.dispose();
     super.dispose();
   }
@@ -70,21 +82,16 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                     ),
                     const SizedBox(height: 10),
                     FilledButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          _voiceRecorded = true;
-                        });
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('10-second voice recorded.'),
-                          ),
-                        );
-                      },
+                      onPressed: _toggleRecording,
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF0F4D52),
                       ),
-                      icon: const Icon(Icons.mic),
-                      label: const Text('Record 10s Voice'),
+                      icon: Icon(_isRecording ? Icons.stop : Icons.mic),
+                      label: Text(
+                        _isRecording
+                            ? 'Stop Recording (${_recordedDuration}s/10s)'
+                            : 'Record 10s Voice',
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -101,7 +108,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                         const SizedBox(width: 8),
                         Text(
                           _voiceRecorded
-                              ? 'Voice is ready and will be saved to Profile.'
+                              ? 'Voice is ready (${_recordedDuration}s) and will be saved to Profile.'
                               : 'Voice not recorded yet',
                           style: TextStyle(color: subtle),
                         ),
@@ -144,11 +151,82 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     UserProfileStore.instance.createAccount(
       name: trimmedName,
       durationSeconds: 10,
+      filePath: _recordedFilePath,
     );
+
+    if (_recordedFilePath != null) {
+      unawaited(
+        _apiClient.enrollVoiceSample(
+          filePath: _recordedFilePath!,
+          label: 'Primary voice',
+        ),
+      );
+    }
+
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const MainDashboardScreen()),
       (route) => false,
     );
+  }
+
+  Future<void> _toggleRecording() async {
+    if (_isRecording) {
+      await _stopRecording();
+      return;
+    }
+
+    final hasPermission = await _recorderService.hasPermission();
+    if (!hasPermission) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Microphone permission is required.')),
+      );
+      return;
+    }
+
+    final filePath = await _recorderService.startRecording(
+      filePrefix: 'primary-voice',
+    );
+
+    if (!mounted) return;
+
+    _timer?.cancel();
+    setState(() {
+      _isRecording = true;
+      _voiceRecorded = false;
+      _recordedDuration = 0;
+      _recordedFilePath = filePath;
+    });
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+      if (!mounted) return;
+      final next = _recordedDuration + 1;
+      setState(() {
+        _recordedDuration = next;
+      });
+      if (next >= 10) {
+        await _stopRecording();
+      }
+    });
+  }
+
+  Future<void> _stopRecording() async {
+    _timer?.cancel();
+    final path = await _recorderService.stopRecording();
+    if (!mounted) return;
+
+    setState(() {
+      _isRecording = false;
+      _voiceRecorded = (path ?? _recordedFilePath) != null;
+      _recordedFilePath = path ?? _recordedFilePath;
+      _recordedDuration = _recordedDuration.clamp(1, 10);
+    });
+
+    if (_voiceRecorded) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Voice recording saved.')));
+    }
   }
 }
