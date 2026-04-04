@@ -32,11 +32,22 @@ class InstalledAppsService {
                   package: (item['package'] as String?) ?? '',
                 ))
             .where((item) => item.name.isNotEmpty && item.package.isNotEmpty)
-            .toList(growable: false);
+            .toList(growable: true);
+
+        if (!apps.any((app) => app.package == 'com.whatsapp')) {
+          apps.add(const InstalledApp(name: 'WhatsApp', package: 'com.whatsapp'));
+        }
+        if (!apps.any((app) => app.package == 'com.whatsapp.w4b')) {
+          apps.add(const InstalledApp(name: 'WhatsApp Business', package: 'com.whatsapp.w4b'));
+        }
+
         apps.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
         return apps;
       } catch (_) {
-        return const [];
+        return const [
+          InstalledApp(name: 'WhatsApp', package: 'com.whatsapp'),
+          InstalledApp(name: 'WhatsApp Business', package: 'com.whatsapp.w4b'),
+        ];
       }
     }
 

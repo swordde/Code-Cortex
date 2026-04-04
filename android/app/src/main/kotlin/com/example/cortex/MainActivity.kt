@@ -2,6 +2,7 @@ package com.example.cortex
 
 import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -21,19 +22,54 @@ class MainActivity : FlutterActivity() {
 				when (call.method) {
 					"getInstalledApps" -> {
 						try {
-							val apps = packageManager
-								.getInstalledApplications(0)
-								.filter { appInfo ->
-									appInfo.packageName != applicationContext.packageName &&
-										packageManager.getLaunchIntentForPackage(appInfo.packageName) != null
+							val appsByPackage = linkedMapOf<String, String>()
+
+							val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
+								addCategory(Intent.CATEGORY_LAUNCHER)
+							}
+							val launchable = packageManager.queryIntentActivities(launcherIntent, 0)
+							for (resolveInfo in launchable) {
+								val packageName = resolveInfo.activityInfo?.packageName ?: continue
+								if (packageName == applicationContext.packageName) continue
+								val label = resolveInfo.loadLabel(packageManager)?.toString().orEmpty()
+								if (label.isNotBlank()) {
+									appsByPackage[packageName] = label
 								}
-								.map { appInfo ->
+							}
+
+							val installed = packageManager.getInstalledApplications(0)
+							for (appInfo in installed) {
+								if (appInfo.packageName == applicationContext.packageName) continue
+								if (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM != 0) continue
+								val hasLauncher = packageManager.getLaunchIntentForPackage(appInfo.packageName) != null
+								if (!hasLauncher && appInfo.packageName !in setOf("com.whatsapp", "com.whatsapp.w4b")) {
+									continue
+								}
+								val label = packageManager.getApplicationLabel(appInfo).toString()
+								if (label.isNotBlank()) {
+									appsByPackage[appInfo.packageName] = label
+								}
+							}
+
+							fun addKnownPackage(packageName: String, fallbackName: String) {
+								try {
+									val appInfo = packageManager.getApplicationInfo(packageName, 0)
+									val label = packageManager.getApplicationLabel(appInfo).toString().ifBlank { fallbackName }
+									appsByPackage[packageName] = label
+								} catch (_: PackageManager.NameNotFoundException) {
+								}
+							}
+
+							addKnownPackage("com.whatsapp", "WhatsApp")
+							addKnownPackage("com.whatsapp.w4b", "WhatsApp Business")
+
+							val apps = appsByPackage
+								.map { (packageName, name) ->
 									mapOf(
-										"name" to packageManager.getApplicationLabel(appInfo).toString(),
-										"package" to appInfo.packageName
+										"name" to name,
+										"package" to packageName
 									)
 								}
-								.distinctBy { it["package"] }
 								.sortedBy { (it["name"] ?: "").toString().lowercase() }
 
 							result.success(apps)
