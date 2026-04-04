@@ -35,7 +35,9 @@ class _CortexScreenState extends State<CortexScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surfaceColor = isDark ? const Color(0xFF1D2225) : Colors.white;
     final accentColor = const Color(0xFF0F4D52);
-    final subtleColor = isDark ? const Color(0xFFAAB4BA) : const Color(0xFF7A8288);
+    final subtleColor = isDark
+        ? const Color(0xFFAAB4BA)
+        : const Color(0xFF7A8288);
 
     return Scaffold(
       appBar: AppBar(
@@ -75,17 +77,13 @@ class _CortexScreenState extends State<CortexScreen> {
                       children: [
                         Text(
                           'Auto Reply',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'Automatically respond to messages',
-                          style: TextStyle(
-                            color: subtleColor,
-                            fontSize: 13,
-                          ),
+                          style: TextStyle(color: subtleColor, fontSize: 13),
                         ),
                       ],
                     ),
@@ -107,9 +105,9 @@ class _CortexScreenState extends State<CortexScreen> {
             // Saved Replies Section
             Text(
               'Saved Replies',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
             ..._savedReplies.map((reply) {
@@ -120,7 +118,10 @@ class _CortexScreenState extends State<CortexScreen> {
                     color: surfaceColor,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   child: Row(
                     children: [
                       Container(
@@ -130,19 +131,14 @@ class _CortexScreenState extends State<CortexScreen> {
                           color: accentColor.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: Icon(
-                          Icons.check,
-                          size: 14,
-                          color: accentColor,
-                        ),
+                        child: Icon(Icons.check, size: 14, color: accentColor),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           reply,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w500),
                         ),
                       ),
                       IconButton(
@@ -151,11 +147,7 @@ class _CortexScreenState extends State<CortexScreen> {
                             _savedReplies.remove(reply);
                           });
                         },
-                        icon: Icon(
-                          Icons.close,
-                          size: 18,
-                          color: subtleColor,
-                        ),
+                        icon: Icon(Icons.close, size: 18, color: subtleColor),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(
                           minWidth: 32,
@@ -173,14 +165,13 @@ class _CortexScreenState extends State<CortexScreen> {
                 _showAddReplyDialog(context);
               },
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.add,
-                      color: accentColor,
-                      size: 20,
-                    ),
+                    Icon(Icons.add, color: accentColor, size: 20),
                     const SizedBox(width: 8),
                     Text(
                       'Add Reply',
@@ -198,9 +189,9 @@ class _CortexScreenState extends State<CortexScreen> {
             // Scheduled Messages Section
             Text(
               'Scheduled Messages',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
             ..._scheduledMessages.map((message) {
@@ -211,7 +202,10 @@ class _CortexScreenState extends State<CortexScreen> {
                     color: surfaceColor,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   child: Row(
                     children: [
                       Container(
@@ -221,11 +215,7 @@ class _CortexScreenState extends State<CortexScreen> {
                           color: accentColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Icon(
-                          message.icon,
-                          size: 20,
-                          color: accentColor,
-                        ),
+                        child: Icon(message.icon, size: 20, color: accentColor),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -234,9 +224,8 @@ class _CortexScreenState extends State<CortexScreen> {
                           children: [
                             Text(
                               message.title,
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(height: 2),
                             Text(
@@ -319,10 +308,7 @@ class _CortexScreenState extends State<CortexScreen> {
                   Navigator.pop(context);
                 }
               },
-              child: Text(
-                'Add',
-                style: TextStyle(color: accentColor),
-              ),
+              child: Text('Add', style: TextStyle(color: accentColor)),
             ),
           ],
         );
@@ -386,10 +372,7 @@ class _CortexScreenState extends State<CortexScreen> {
                   Navigator.pop(context);
                 }
               },
-              child: Text(
-                'Add',
-                style: TextStyle(color: accentColor),
-              ),
+              child: Text('Add', style: TextStyle(color: accentColor)),
             ),
           ],
         );

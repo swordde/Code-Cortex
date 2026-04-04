@@ -136,7 +136,28 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Custom'),
+        title: GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CustomModeScreen()),
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F4D52).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text(
+              'Custom',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
         centerTitle: false,
         backgroundColor: Colors.transparent,
         actions: [
