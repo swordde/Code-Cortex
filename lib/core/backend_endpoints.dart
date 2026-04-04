@@ -36,6 +36,9 @@ class BackendEndpoints {
   static Uri get notificationsUri =>
       Uri.parse('http://$host:$port/api/notifications');
 
+    static Uri get notificationsIngestUri =>
+      Uri.parse('http://$host:$port/api/notifications/ingest');
+
     static Uri notificationByIdUri(String id) =>
       Uri.parse('http://$host:$port/api/notifications/$id');
 

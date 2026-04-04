@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../core/android_notification_listener_service.dart';
 import '../core/api_client.dart';
 import '../core/websocket_service.dart';
 import '../models/app_notification.dart';
@@ -27,6 +28,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
   late final ApiClient _apiClient;
   late final WebsocketService _websocketService;
   StreamSubscription<AppNotification>? _wsSubscription;
+  StreamSubscription<AndroidNotificationEvent>? _nativeNotificationSubscription;
   Timer? _pollTimer;
   int? _baselineTotal;
 
@@ -50,6 +52,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
     );
     _loadFromBackend();
     _connectWebsocket();
+    _connectAndroidNotificationListener();
     _pollTimer = Timer.periodic(
       const Duration(seconds: 5),
       (_) => _loadFromBackend(),
@@ -60,6 +63,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _wsSubscription?.cancel();
+    _nativeNotificationSubscription?.cancel();
     _pollTimer?.cancel();
     unawaited(_websocketService.disconnect());
     _tapWaveController.dispose();
@@ -70,6 +74,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _loadFromBackend();
+      _connectAndroidNotificationListener();
     }
   }
 
@@ -115,6 +120,47 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
         });
       },
     );
+  }
+
+  Future<void> _connectAndroidNotificationListener() async {
+    final enabled = await AndroidNotificationListenerService.isAccessEnabled();
+    if (!enabled) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Enable Notification Access for Cortex to capture incoming app notifications.',
+          ),
+          action: SnackBarAction(
+            label: 'Open Settings',
+            onPressed: () {
+              AndroidNotificationListenerService.openAccessSettings();
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
+    _nativeNotificationSubscription?.cancel();
+    _nativeNotificationSubscription =
+        AndroidNotificationListenerService.notificationStream().listen((event) {
+          unawaited(_ingestAndroidNotification(event));
+        });
+  }
+
+  Future<void> _ingestAndroidNotification(AndroidNotificationEvent event) async {
+    try {
+      await _apiClient.ingestNotification(
+        appPackage: event.appPackage,
+        appName: event.appName,
+        senderName: event.title,
+        content: event.content,
+      );
+      await _loadFromBackend();
+    } catch (_) {
+      // keep UI responsive if backend ingest fails temporarily
+    }
   }
 
   void _insertNotification(AppNotification notification) {

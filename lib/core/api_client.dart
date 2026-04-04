@@ -51,6 +51,30 @@ class ApiClient {
         .toList();
   }
 
+  Future<void> ingestNotification({
+    required String appPackage,
+    required String content,
+    String appName = 'Unknown',
+    String senderName = '',
+  }) async {
+    final normalizedContent = content.trim();
+    if (appPackage.trim().isEmpty || normalizedContent.isEmpty) {
+      return;
+    }
+
+    final response = await _post(
+      BackendEndpoints.notificationsIngestUri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'app_package': appPackage,
+        'app_name': appName,
+        'sender_name': senderName,
+        'content': normalizedContent,
+      }),
+    );
+    _ensureSuccess(response, 'Failed to ingest notification');
+  }
+
   Future<void> enrollVoiceSample({
     required String filePath,
     required String label,
