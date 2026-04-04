@@ -222,10 +222,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
           await _stopRecording();
         }
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to record. Try again.')),
+        SnackBar(content: Text('Unable to record: $error')),
       );
     }
   }

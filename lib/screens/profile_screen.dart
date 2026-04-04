@@ -16,7 +16,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _cortexModeEnabled = true;
-  bool _isPlayingVoice = false;
+  final bool _isPlayingVoice = false;
   final UserProfileStore _store = UserProfileStore.instance;
   final VoiceRecorderService _recorderService = VoiceRecorderService();
   // final AudioPlayer _audioPlayer = AudioPlayer(); // Temporarily disabled

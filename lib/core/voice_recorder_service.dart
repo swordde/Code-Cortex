@@ -1,7 +1,7 @@
-import 'dart:io';
-
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+
+import 'platform_file_utils.dart';
 
 class VoiceRecorderService {
   final AudioRecorder _recorder = AudioRecorder();
@@ -31,7 +31,6 @@ class VoiceRecorderService {
   }
 
   Future<bool> exists(String? filePath) async {
-    if (filePath == null || filePath.isEmpty) return false;
-    return File(filePath).exists();
+    return pathExists(filePath);
   }
 }

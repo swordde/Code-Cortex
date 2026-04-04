@@ -1,10 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
 import '../models/app_notification.dart';
 import 'backend_endpoints.dart';
+import 'platform_file_utils.dart';
 
 class ApiClient {
   final http.Client _client;
@@ -30,22 +30,23 @@ class ApiClient {
     required String filePath,
     required String label,
   }) async {
-    final file = File(filePath);
-    if (!await file.exists()) return;
+    final bytes = await readBytesFromPath(filePath);
+    if (bytes == null || bytes.isEmpty) return;
 
-    final bytes = await file.readAsBytes();
-    final payload = {
-      'label': label,
-      'audio_base64': base64Encode(bytes),
-      'format': 'm4a',
-      'recorded_at': DateTime.now().toUtc().toIso8601String(),
-    };
+    final request = http.MultipartRequest('POST', BackendEndpoints.voiceEnrollUri)
+      ..fields['label'] = label
+      ..fields['format'] = 'm4a'
+      ..fields['recorded_at'] = DateTime.now().toUtc().toIso8601String()
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          'audio',
+          bytes,
+          filename: 'voice-${DateTime.now().millisecondsSinceEpoch}.m4a',
+        ),
+      );
 
-    final response = await _client.post(
-      BackendEndpoints.voiceEnrollUri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(payload),
-    );
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
 
     _ensureSuccess(response, 'Voice enroll failed');
   }

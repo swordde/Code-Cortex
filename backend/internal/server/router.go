@@ -3,12 +3,14 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"cortex/backend/internal/config"
@@ -538,10 +540,48 @@ func (a *API) handleListActivity(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleVoiceEnroll(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", "VALIDATION_ERROR")
-		return
+	var body []byte
+	if r.MultipartForm != nil || r.Header.Get("Content-Type") != "" && strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		if err := r.ParseMultipartForm(20 << 20); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid multipart form", "VALIDATION_ERROR")
+			return
+		}
+		file, header, err := r.FormFile("audio")
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "audio file is required", "VALIDATION_ERROR")
+			return
+		}
+		defer file.Close()
+
+		data, readErr := io.ReadAll(file)
+		if readErr != nil {
+			writeError(w, http.StatusBadRequest, "failed to read audio file", "VALIDATION_ERROR")
+			return
+		}
+
+		payload := map[string]any{
+			"label":       r.FormValue("label"),
+			"audio_base64": base64.StdEncoding.EncodeToString(data),
+			"format":      r.FormValue("format"),
+			"filename":    header.Filename,
+			"recorded_at": r.FormValue("recorded_at"),
+		}
+		if payload["format"] == "" {
+			payload["format"] = "m4a"
+		}
+		encoded, marshalErr := json.Marshal(payload)
+		if marshalErr != nil {
+			writeError(w, http.StatusInternalServerError, "failed to process audio payload", "INTERNAL_ERROR")
+			return
+		}
+		body = encoded
+	} else {
+		var err error
+		body, err = io.ReadAll(r.Body)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body", "VALIDATION_ERROR")
+			return
+		}
 	}
 	resp, callErr := a.forwardAI(r.Context(), "/voice/enroll", body)
 	if callErr != nil {
