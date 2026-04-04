@@ -72,6 +72,12 @@ func (s *MongoStore) ensureSeeds(ctx context.Context) error {
 	if count == 0 {
 		preset := []any{
 			models.Mode{ID: "mode-default", Name: "default", IsActive: true, IsPreset: true, CortexLevel: "off"},
+			models.Mode{ID: "mode-study", Name: "study", IsActive: false, IsPreset: true, CortexLevel: "off"},
+			models.Mode{ID: "mode-office", Name: "office", IsActive: false, IsPreset: true, CortexLevel: "off"},
+			models.Mode{ID: "mode-home", Name: "home", IsActive: false, IsPreset: true, CortexLevel: "off"},
+			models.Mode{ID: "mode-gaming", Name: "gaming", IsActive: false, IsPreset: true, CortexLevel: "off"},
+			models.Mode{ID: "mode-college", Name: "college", IsActive: false, IsPreset: true, CortexLevel: "off"},
+			models.Mode{ID: "mode-custom", Name: "custom", IsActive: false, IsPreset: true, CortexLevel: "off"},
 		}
 		if _, err := modesCol.InsertMany(ctx, preset); err != nil {
 			return err
@@ -481,6 +487,16 @@ func (s *MongoStore) GetProfile(ctx context.Context) (*models.UserProfile, error
 
 func (s *MongoStore) UpdateProfile(ctx context.Context, p *models.UserProfile) error {
 	_, err := s.col("profile").UpdateOne(ctx, bson.M{}, bson.M{"$set": p}, options.Update().SetUpsert(true))
+	return err
+}
+
+func (s *MongoStore) SetProfileVoiceLock(ctx context.Context, locked bool) error {
+	_, err := s.col("profile").UpdateOne(
+		ctx,
+		bson.M{},
+		bson.M{"$set": bson.M{"voice_locked": locked}},
+		options.Update().SetUpsert(true),
+	)
 	return err
 }
 

@@ -94,6 +94,7 @@ type UserProfile struct {
 	NotifPermission bool     `json:"notif_permission" bson:"notif_permission"`
 	ThemeMode       string   `json:"theme_mode" bson:"theme_mode"`
 	LinkedAccounts  []string `json:"linked_accounts" bson:"linked_accounts"`
+	VoiceLocked     bool     `json:"voice_locked" bson:"voice_locked"`
 }
 
 type NotificationMessage struct {

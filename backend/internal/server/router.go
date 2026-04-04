@@ -1,9 +1,7 @@
 package server
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"io"
 	"log"
@@ -27,9 +25,12 @@ type API struct {
 	cfg        config.Config
 	store      *store.MongoStore
 	classifier *services.ClassifierService
+	feedback   *services.FeedbackService
 	analytics  *services.AnalyticsService
 	modes      *services.ModeManager
 	cortex     *services.CortexService
+	aiProxy    *services.AIProxyService
+	modelStats *services.ModelStatusService
 	dispatcher *services.PushDispatcher
 	upgrader   websocket.Upgrader
 }
@@ -38,18 +39,24 @@ func NewAPI(
 	cfg config.Config,
 	s *store.MongoStore,
 	classifier *services.ClassifierService,
+	feedback *services.FeedbackService,
 	analytics *services.AnalyticsService,
 	modeManager *services.ModeManager,
 	cortex *services.CortexService,
+	aiProxy *services.AIProxyService,
+	modelStats *services.ModelStatusService,
 	dispatcher *services.PushDispatcher,
 ) *API {
 	return &API{
 		cfg:        cfg,
 		store:      s,
 		classifier: classifier,
+		feedback:   feedback,
 		analytics:  analytics,
 		modes:      modeManager,
 		cortex:     cortex,
+		aiProxy:    aiProxy,
+		modelStats: modelStats,
 		dispatcher: dispatcher,
 		upgrader:   websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
 	}
@@ -89,6 +96,13 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/cortex/activity", a.handleListActivity)
 	mux.HandleFunc("POST /api/cortex/voice/enroll", a.handleVoiceEnroll)
 	mux.HandleFunc("POST /api/cortex/voice/verify", a.handleVoiceVerify)
+	mux.HandleFunc("GET /api/ai/model/status", a.handleAIModelStatus)
+	mux.HandleFunc("POST /api/ai/finetune", a.handleAIFinetune)
+	mux.HandleFunc("GET /api/ai/cortex/log", a.handleAICortexLog)
+	mux.HandleFunc("GET /api/ai/cortex/status", a.handleAICortexStatus)
+	mux.HandleFunc("POST /api/ai/voice-assistant/start", a.handleAIVoiceAssistantStart)
+	mux.HandleFunc("POST /api/ai/voice-assistant/stop", a.handleAIVoiceAssistantStop)
+	mux.HandleFunc("GET /api/ai/voice-assistant/status", a.handleAIVoiceAssistantStatus)
 	mux.HandleFunc("GET /api/profile", a.handleGetProfile)
 	mux.HandleFunc("PUT /api/profile", a.handleUpdateProfile)
 	mux.HandleFunc("POST /api/profile/avatar", a.handleUploadAvatar)
@@ -122,6 +136,9 @@ func (a *API) handleIngest(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "content and app_package are required", "VALIDATION_ERROR")
 		return
 	}
+	if strings.TrimSpace(n.AppName) == "" {
+		n.AppName = n.AppPackage
+	}
 
 	n.ID = uuid.NewString()
 	n.Timestamp = time.Now().UTC()
@@ -134,7 +151,7 @@ func (a *API) handleIngest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p, conf, reason, err := a.classifier.Classify(r.Context(), &n, activeMode.Name)
+	p, conf, reason, err := a.classifier.Classify(r.Context(), n.AppName, n.Content, activeMode.Name)
 	if err != nil {
 		log.Printf("classifier warning: %v", err)
 	}
@@ -215,7 +232,24 @@ func (a *API) handleMarkRead(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) handleMarkActioned(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	err := a.store.MarkActioned(r.Context(), id)
+	n, err := a.store.GetNotification(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch notification", "INTERNAL_ERROR")
+		return
+	}
+	if n == nil {
+		writeError(w, http.StatusNotFound, "notification not found", "NOT_FOUND")
+		return
+	}
+
+	var payload struct {
+		CorrectedPriority string `json:"corrected_priority"`
+	}
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+	}
+
+	err = a.store.MarkActioned(r.Context(), id)
 	if err == mongo.ErrNoDocuments {
 		writeError(w, http.StatusNotFound, "notification not found", "NOT_FOUND")
 		return
@@ -223,6 +257,16 @@ func (a *API) handleMarkActioned(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to mark actioned", "INTERNAL_ERROR")
 		return
+	}
+
+	if strings.TrimSpace(payload.CorrectedPriority) != "" {
+		go func(notification *models.Notification, corrected string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := a.feedback.SubmitFeedback(ctx, notification.Content, notification.AppName, notification.Mode, corrected); err != nil {
+				log.Printf("feedback warning: %v", err)
+			}
+		}(n, payload.CorrectedPriority)
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -438,6 +482,13 @@ func (a *API) handleUpdateCortexConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid json body", "VALIDATION_ERROR")
 		return
 	}
+	if cfg.Enabled {
+		profile, err := a.store.GetProfile(r.Context())
+		if err == nil && profile != nil && profile.VoiceLocked {
+			writeError(w, http.StatusLocked, "voice profile is locked", "VOICE_LOCKED")
+			return
+		}
+	}
 	if err := a.store.UpdateCortexConfig(r.Context(), &cfg); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update cortex config", "INTERNAL_ERROR")
 		return
@@ -564,55 +615,55 @@ func (a *API) handleListActivity(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleVoiceEnroll(w http.ResponseWriter, r *http.Request) {
-	var body []byte
-	if r.MultipartForm != nil || r.Header.Get("Content-Type") != "" && strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+	var reqBody map[string]any
+	contentType := r.Header.Get("Content-Type")
+	if strings.HasPrefix(contentType, "multipart/form-data") {
 		if err := r.ParseMultipartForm(20 << 20); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid multipart form", "VALIDATION_ERROR")
 			return
 		}
-		file, header, err := r.FormFile("audio")
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "audio file is required", "VALIDATION_ERROR")
-			return
+		reqBody = map[string]any{
+			"user_id":       strings.TrimSpace(r.FormValue("user_id")),
+			"audio_samples": r.MultipartForm.Value["audio_samples"],
 		}
-		defer file.Close()
-
-		data, readErr := io.ReadAll(file)
-		if readErr != nil {
-			writeError(w, http.StatusBadRequest, "failed to read audio file", "VALIDATION_ERROR")
-			return
-		}
-
-		payload := map[string]any{
-			"label":       r.FormValue("label"),
-			"audio_base64": base64.StdEncoding.EncodeToString(data),
-			"format":      r.FormValue("format"),
-			"filename":    header.Filename,
-			"recorded_at": r.FormValue("recorded_at"),
-		}
-		if payload["format"] == "" {
-			payload["format"] = "m4a"
-		}
-		encoded, marshalErr := json.Marshal(payload)
-		if marshalErr != nil {
-			writeError(w, http.StatusInternalServerError, "failed to process audio payload", "INTERNAL_ERROR")
-			return
-		}
-		body = encoded
 	} else {
-		var err error
-		body, err = io.ReadAll(r.Body)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body", "VALIDATION_ERROR")
+		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid json body", "VALIDATION_ERROR")
 			return
 		}
 	}
-	resp, callErr := a.forwardAI(r.Context(), "/voice/enroll", body)
-	if callErr != nil {
-		writeError(w, http.StatusBadGateway, "voice enroll service unavailable", "UPSTREAM_ERROR")
+
+	userID, _ := reqBody["user_id"].(string)
+	rawSamples, ok := reqBody["audio_samples"].([]any)
+	if !ok {
+		if cast, ok := reqBody["audio_samples"].([]string); ok {
+			rawSamples = make([]any, 0, len(cast))
+			for _, sample := range cast {
+				rawSamples = append(rawSamples, sample)
+			}
+		}
+	}
+	if strings.TrimSpace(userID) == "" {
+		writeError(w, http.StatusBadRequest, "user_id is required", "VALIDATION_ERROR")
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	if len(rawSamples) != 3 {
+		writeError(w, http.StatusBadRequest, "audio_samples must contain exactly 3 samples", "VALIDATION_ERROR")
+		return
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to encode request", "INTERNAL_ERROR")
+		return
+	}
+
+	respBody, status, proxyErr := a.aiProxy.ProxyToAI(r.Context(), http.MethodPost, "/voice/enroll", body)
+	if proxyErr != nil {
+		writeError(w, http.StatusServiceUnavailable, "AI service unavailable", "AI_UNREACHABLE")
+		return
+	}
+	writeRawJSON(w, status, respBody)
 }
 
 func (a *API) handleVoiceVerify(w http.ResponseWriter, r *http.Request) {
@@ -621,12 +672,69 @@ func (a *API) handleVoiceVerify(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body", "VALIDATION_ERROR")
 		return
 	}
-	resp, callErr := a.forwardAI(r.Context(), "/voice/verify", body)
-	if callErr != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"matched": false, "confidence": 0.0})
+
+	respBody, status, proxyErr := a.aiProxy.ProxyToAI(r.Context(), http.MethodPost, "/voice/verify", body)
+	if proxyErr != nil {
+		writeError(w, http.StatusServiceUnavailable, "AI service unavailable", "AI_UNREACHABLE")
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+
+	var verifyResp map[string]any
+	if err := json.Unmarshal(respBody, &verifyResp); err == nil {
+		if locked, ok := verifyResp["locked"].(bool); ok && locked {
+			_ = a.store.SetProfileVoiceLock(r.Context(), true)
+		}
+	}
+
+	writeRawJSON(w, status, respBody)
+}
+
+func (a *API) handleAIModelStatus(w http.ResponseWriter, r *http.Request) {
+	status := a.modelStats.GetModelStatus()
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (a *API) handleAIFinetune(w http.ResponseWriter, r *http.Request) {
+	a.handleAIProxy(w, r, http.MethodPost, "/finetune")
+}
+
+func (a *API) handleAICortexLog(w http.ResponseWriter, r *http.Request) {
+	a.handleAIProxy(w, r, http.MethodGet, "/cortex/log")
+}
+
+func (a *API) handleAICortexStatus(w http.ResponseWriter, r *http.Request) {
+	a.handleAIProxy(w, r, http.MethodGet, "/cortex/status")
+}
+
+func (a *API) handleAIVoiceAssistantStart(w http.ResponseWriter, r *http.Request) {
+	a.handleAIProxy(w, r, http.MethodPost, "/voice-assistant/start")
+}
+
+func (a *API) handleAIVoiceAssistantStop(w http.ResponseWriter, r *http.Request) {
+	a.handleAIProxy(w, r, http.MethodPost, "/voice-assistant/stop")
+}
+
+func (a *API) handleAIVoiceAssistantStatus(w http.ResponseWriter, r *http.Request) {
+	a.handleAIProxy(w, r, http.MethodGet, "/voice-assistant/status")
+}
+
+func (a *API) handleAIProxy(w http.ResponseWriter, r *http.Request, method, path string) {
+	var body []byte
+	if r.Body != nil {
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body", "VALIDATION_ERROR")
+			return
+		}
+		body = data
+	}
+
+	respBody, status, err := a.aiProxy.ProxyToAI(r.Context(), method, path, body)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "AI service unavailable", "AI_UNREACHABLE")
+		return
+	}
+	writeRawJSON(w, status, respBody)
 }
 
 func (a *API) handleGetProfile(w http.ResponseWriter, r *http.Request) {
@@ -687,29 +795,16 @@ func (a *API) handleUploadAvatar(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"avatar_path": path})
 }
 
-func (a *API) forwardAI(ctx context.Context, endpoint string, body []byte) (map[string]any, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.cfg.AIServiceURL+endpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	var payload map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, err
-	}
-	return payload, nil
-}
-
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func writeRawJSON(w http.ResponseWriter, status int, body []byte) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, _ = w.Write(body)
 }
 
 func writeError(w http.ResponseWriter, status int, msg, code string) {

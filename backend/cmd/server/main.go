@@ -30,15 +30,19 @@ func main() {
 	}()
 
 	dispatcher := services.NewPushDispatcher(cfg.UnixSocketPath)
-	classifier := services.NewClassifierService(cfg.AIServiceURL)
+	aiProxy := services.NewAIProxyService(cfg.AIServiceURL, cfg.AITimeoutSec)
+	modelStatus := services.NewModelStatusService(aiProxy)
+	modelStatus.Start(context.Background())
+	classifier := services.NewClassifierService(cfg.AIServiceURL, cfg.AITimeoutSec)
+	feedback := services.NewFeedbackService(cfg.AIServiceURL, cfg.AITimeoutSec)
 	analyticsService := services.NewAnalyticsService(mongoStore)
 	modeManager := services.NewModeManager(mongoStore, dispatcher)
 	if err := modeManager.Init(context.Background()); err != nil {
 		log.Fatalf("failed to initialize mode manager: %v", err)
 	}
-	cortexService := services.NewCortexService(mongoStore, dispatcher, cfg.AIServiceURL)
+	cortexService := services.NewCortexService(mongoStore, dispatcher, cfg.AIServiceURL, cfg.AITimeoutSec)
 
-	api := server.NewAPI(cfg, mongoStore, classifier, analyticsService, modeManager, cortexService, dispatcher)
+	api := server.NewAPI(cfg, mongoStore, classifier, feedback, analyticsService, modeManager, cortexService, aiProxy, modelStatus, dispatcher)
 
 	httpServer := &http.Server{
 		Addr:         cfg.Port,

@@ -3,15 +3,14 @@ package services
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
-
-	"cortex/backend/internal/models"
 )
 
 type classifierCache struct {
@@ -24,53 +23,63 @@ type classifierCache struct {
 type ClassifierService struct {
 	baseURL string
 	client  *http.Client
-	mu      sync.Mutex
-	cache   map[string]classifierCache
+	cache   sync.Map
 }
 
-func NewClassifierService(aiBaseURL string) *ClassifierService {
+func NewClassifierService(aiBaseURL string, timeoutSec int) *ClassifierService {
+	if timeoutSec <= 0 {
+		timeoutSec = 5
+	}
 	return &ClassifierService{
 		baseURL: strings.TrimRight(aiBaseURL, "/"),
-		client:  &http.Client{Timeout: 3 * time.Second},
-		cache:   map[string]classifierCache{},
+		client:  &http.Client{Timeout: time.Duration(timeoutSec) * time.Second},
 	}
 }
 
-func (s *ClassifierService) Classify(ctx context.Context, n *models.Notification, mode string) (priority string, confidence float64, labelReason string, err error) {
-	cacheKey := s.hashKey(n.Content + "|" + n.AppPackage + "|" + mode)
+func (s *ClassifierService) Classify(ctx context.Context, appName string, content string, mode string) (priority string, confidence float64, labelReason string, err error) {
+	cacheKey := s.cacheKey(appName, content, mode)
 	if p, c, r, ok := s.readCache(cacheKey); ok {
 		return p, c, r, nil
 	}
 
 	payload := map[string]any{
-		"content":     n.Content,
-		"app_package": n.AppPackage,
-		"sender_name": n.SenderName,
-		"mode":        mode,
+		"content": content,
+		"app":     appName,
+		"mode":    toAIMode(mode),
+		"user_id": "snp_backend",
 	}
-	body, _ := json.Marshal(payload)
+	body, marshalErr := json.Marshal(payload)
+	if marshalErr != nil {
+		return "MEDIUM", 0.0, "fallback:encode", nil
+	}
 	url := s.baseURL + "/classify"
 
 	callOnce := func() (string, float64, string, int, error) {
 		req, reqErr := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 		if reqErr != nil {
-			return string(models.PriorityMedium), 0, "fallback:error", 0, reqErr
+			return "MEDIUM", 0.0, "fallback:error", 0, reqErr
 		}
 		req.Header.Set("Content-Type", "application/json")
 		resp, httpErr := s.client.Do(req)
 		if httpErr != nil {
-			if ctx.Err() != nil {
-				return string(models.PriorityMedium), 0, "fallback:timeout", 0, nil
-			}
-			return string(models.PriorityMedium), 0, "fallback:error", 0, httpErr
+			log.Printf("classifier warning: AI call failed: %v", httpErr)
+			return "MEDIUM", 0.0, "fallback:timeout", 0, nil
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode >= 500 {
 			return "", 0, "", resp.StatusCode, nil
 		}
+		if resp.StatusCode == http.StatusUnprocessableEntity {
+			return "MEDIUM", 0.0, "fallback:validation_error", resp.StatusCode, nil
+		}
 		if resp.StatusCode < 200 || resp.StatusCode > 299 {
-			return string(models.PriorityMedium), 0, "fallback:non_2xx", resp.StatusCode, nil
+			return "MEDIUM", 0.0, "fallback:non_2xx", resp.StatusCode, nil
+		}
+
+		respBody, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return "MEDIUM", 0.0, "fallback:decode", 0, nil
 		}
 
 		var parsed struct {
@@ -78,14 +87,15 @@ func (s *ClassifierService) Classify(ctx context.Context, n *models.Notification
 			Confidence float64 `json:"confidence"`
 			Reason     string  `json:"label_reason"`
 		}
-		if decodeErr := json.NewDecoder(resp.Body).Decode(&parsed); decodeErr != nil {
-			return string(models.PriorityMedium), 0, "fallback:decode", 0, nil
+		if decodeErr := json.Unmarshal(respBody, &parsed); decodeErr != nil {
+			return "MEDIUM", 0.0, "fallback:decode", 0, nil
 		}
-		priorityValue := strings.ToUpper(strings.TrimSpace(parsed.Priority))
+
+		priorityValue := normalizePriority(parsed.Priority)
 		switch priorityValue {
-		case string(models.PriorityEmergency), string(models.PriorityHigh), string(models.PriorityMedium), string(models.PriorityLow):
+		case "EMERGENCY", "HIGH", "MEDIUM", "LOW":
 		default:
-			priorityValue = string(models.PriorityMedium)
+			priorityValue = "MEDIUM"
 		}
 		reason := parsed.Reason
 		if reason == "" {
@@ -96,41 +106,49 @@ func (s *ClassifierService) Classify(ctx context.Context, n *models.Notification
 
 	p, c, r, status, callErr := callOnce()
 	if callErr != nil {
-		return string(models.PriorityMedium), 0, "fallback:error", nil
+		return "MEDIUM", 0.0, "fallback:error", nil
 	}
 	if status >= 500 {
 		time.Sleep(200 * time.Millisecond)
 		p2, c2, r2, _, retryErr := callOnce()
 		if retryErr != nil {
-			return string(models.PriorityMedium), 0, "fallback:error", nil
+			return "MEDIUM", 0.0, "fallback:server_error", nil
 		}
-		p, c, r = p2, c2, r2
+		if p2 == "" {
+			p, c, r = "MEDIUM", 0.0, "fallback:server_error"
+		} else {
+			p, c, r = p2, c2, r2
+		}
 	}
 
+	if p == "" {
+		p = "MEDIUM"
+	}
 	s.writeCache(cacheKey, p, c, r)
 	return p, c, r, nil
 }
 
-func (s *ClassifierService) hashKey(v string) string {
-	h := sha256.Sum256([]byte(v))
-	return hex.EncodeToString(h[:])
+func (s *ClassifierService) cacheKey(appName, content, mode string) string {
+	trimmedContent := content
+	if len(trimmedContent) > 50 {
+		trimmedContent = trimmedContent[:50]
+	}
+	return fmt.Sprintf("%s|%s|%s", appName, trimmedContent, mode)
 }
 
 func (s *ClassifierService) readCache(key string) (string, float64, string, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	item, ok := s.cache[key]
-	if !ok || time.Now().After(item.expiresAt) {
-		if ok {
-			delete(s.cache, key)
-		}
+	v, ok := s.cache.Load(key)
+	if !ok {
+		return "", 0, "", false
+	}
+	item := v.(classifierCache)
+	if time.Now().After(item.expiresAt) {
+		s.cache.Delete(key)
 		return "", 0, "", false
 	}
 	return item.priority, item.confidence, item.labelReason, true
 }
 
 func (s *ClassifierService) writeCache(key, p string, c float64, r string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.cache[key] = classifierCache{priority: p, confidence: c, labelReason: r, expiresAt: time.Now().Add(60 * time.Second)}
+	s.cache.Store(key, classifierCache{priority: p, confidence: c, labelReason: r, expiresAt: time.Now().Add(60 * time.Second)})
 }
