@@ -389,6 +389,7 @@ class _CortexScreenState extends State<CortexScreen> {
   Future<void> _showScheduleDialog(BuildContext context) async {
     final bodyController = TextEditingController();
     DateTime selectedDateTime = DateTime.now().add(const Duration(hours: 1));
+    final parentContext = this.context;
 
     await showDialog<void>(
       context: context,
@@ -412,20 +413,21 @@ class _CortexScreenState extends State<CortexScreen> {
                   const SizedBox(height: 10),
                   TextButton.icon(
                     onPressed: () async {
+                      if (!mounted) return;
                       final pickedDate = await showDatePicker(
-                        context: dialogContext,
+                        context: parentContext,
                         firstDate: DateTime.now(),
                         lastDate: DateTime.now().add(const Duration(days: 365)),
                         initialDate: selectedDateTime,
                       );
                       if (pickedDate == null) return;
-                      if (!dialogContext.mounted) return;
+                      if (!mounted || !dialogContext.mounted) return;
                       final pickedTime = await showTimePicker(
-                        context: dialogContext,
+                        context: parentContext,
                         initialTime: TimeOfDay.fromDateTime(selectedDateTime),
                       );
                       if (pickedTime == null) return;
-                      if (!dialogContext.mounted) return;
+                      if (!mounted || !dialogContext.mounted) return;
 
                       setDialogState(() {
                         selectedDateTime = DateTime(
@@ -456,8 +458,10 @@ class _CortexScreenState extends State<CortexScreen> {
                         draftBody: draft,
                         scheduledAt: selectedDateTime,
                       );
+                      if (dialogContext.mounted) {
+                        Navigator.pop(dialogContext);
+                      }
                       await _refreshData();
-                      if (dialogContext.mounted) Navigator.pop(dialogContext);
                     } catch (error) {
                       if (!mounted) return;
                       ScaffoldMessenger.of(this.context).showSnackBar(
