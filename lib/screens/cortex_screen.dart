@@ -390,6 +390,7 @@ class _CortexScreenState extends State<CortexScreen> {
     final bodyController = TextEditingController();
     DateTime selectedDateTime = DateTime.now().add(const Duration(hours: 1));
     final parentContext = this.context;
+    var scheduledCreated = false;
 
     await showDialog<void>(
       context: context,
@@ -458,10 +459,10 @@ class _CortexScreenState extends State<CortexScreen> {
                         draftBody: draft,
                         scheduledAt: selectedDateTime,
                       );
+                      scheduledCreated = true;
                       if (dialogContext.mounted) {
                         Navigator.pop(dialogContext);
                       }
-                      await _refreshData();
                     } catch (error) {
                       if (!mounted) return;
                       ScaffoldMessenger.of(this.context).showSnackBar(
@@ -477,6 +478,10 @@ class _CortexScreenState extends State<CortexScreen> {
         );
       },
     );
+
+    if (scheduledCreated && mounted) {
+      await _refreshData();
+    }
 
     bodyController.dispose();
   }
