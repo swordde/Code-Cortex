@@ -8,11 +8,36 @@ import 'platform_file_utils.dart';
 
 class ApiClient {
   final http.Client _client;
+  static const Duration _requestTimeout = Duration(seconds: 8);
 
   ApiClient({http.Client? client}) : _client = client ?? http.Client();
 
+  Future<http.Response> _get(Uri uri) =>
+      _client.get(uri).timeout(_requestTimeout);
+
+  Future<http.Response> _post(
+    Uri uri, {
+    Map<String, String>? headers,
+    Object? body,
+  }) =>
+      _client
+          .post(uri, headers: headers, body: body)
+          .timeout(_requestTimeout);
+
+  Future<http.Response> _put(
+    Uri uri, {
+    Map<String, String>? headers,
+    Object? body,
+  }) =>
+      _client
+          .put(uri, headers: headers, body: body)
+          .timeout(_requestTimeout);
+
+  Future<http.Response> _delete(Uri uri) =>
+      _client.delete(uri).timeout(_requestTimeout);
+
   Future<List<AppNotification>> fetchNotifications() async {
-    final response = await _client.get(BackendEndpoints.notificationsUri);
+    final response = await _get(BackendEndpoints.notificationsUri);
     _ensureSuccess(response, 'Failed to load notifications');
 
     final decoded = jsonDecode(response.body);
@@ -52,7 +77,7 @@ class ApiClient {
   }
 
   Future<List<BackendMode>> fetchModes() async {
-    final response = await _client.get(BackendEndpoints.modesUri);
+    final response = await _get(BackendEndpoints.modesUri);
     _ensureSuccess(response, 'Failed to load modes');
 
     final decoded = jsonDecode(response.body);
@@ -77,7 +102,7 @@ class ApiClient {
       'schedule_days': <int>[],
     };
 
-    final response = await _client.post(
+    final response = await _post(
       BackendEndpoints.modesUri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(payload),
@@ -87,7 +112,7 @@ class ApiClient {
   }
 
   Future<BackendMode> updateMode(BackendMode mode) async {
-    final response = await _client.put(
+    final response = await _put(
       BackendEndpoints.modeByIdUri(mode.id),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(mode.toJson()),
@@ -97,18 +122,18 @@ class ApiClient {
   }
 
   Future<void> activateMode(String modeId) async {
-    final response = await _client.put(BackendEndpoints.activateModeUri(modeId));
+    final response = await _put(BackendEndpoints.activateModeUri(modeId));
     _ensureSuccess(response, 'Failed to activate mode');
   }
 
   Future<void> deleteMode(String modeId) async {
-    final response = await _client.delete(BackendEndpoints.modeByIdUri(modeId));
+    final response = await _delete(BackendEndpoints.modeByIdUri(modeId));
     if (response.statusCode == 204) return;
     _ensureSuccess(response, 'Failed to delete mode');
   }
 
   Future<List<BackendRule>> fetchRules() async {
-    final response = await _client.get(BackendEndpoints.rulesUri);
+    final response = await _get(BackendEndpoints.rulesUri);
     _ensureSuccess(response, 'Failed to load rules');
 
     final decoded = jsonDecode(response.body);
@@ -120,7 +145,7 @@ class ApiClient {
   }
 
   Future<BackendRule> createRule(BackendRule rule) async {
-    final response = await _client.post(
+    final response = await _post(
       BackendEndpoints.rulesUri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(rule.toJson()),
@@ -130,7 +155,7 @@ class ApiClient {
   }
 
   Future<BackendRule> updateRule(BackendRule rule) async {
-    final response = await _client.put(
+    final response = await _put(
       BackendEndpoints.ruleByIdUri(rule.id),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(rule.toJson()),
@@ -140,19 +165,19 @@ class ApiClient {
   }
 
   Future<void> deleteRule(String id) async {
-    final response = await _client.delete(BackendEndpoints.ruleByIdUri(id));
+    final response = await _delete(BackendEndpoints.ruleByIdUri(id));
     if (response.statusCode == 204) return;
     _ensureSuccess(response, 'Failed to delete rule');
   }
 
   Future<BackendCortexConfig> fetchCortexConfig() async {
-    final response = await _client.get(BackendEndpoints.cortexConfigUri);
+    final response = await _get(BackendEndpoints.cortexConfigUri);
     _ensureSuccess(response, 'Failed to load cortex config');
     return BackendCortexConfig.fromJson(jsonDecode(response.body));
   }
 
   Future<void> updateCortexConfig(BackendCortexConfig config) async {
-    final response = await _client.put(
+    final response = await _put(
       BackendEndpoints.cortexConfigUri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(config.toJson()),
@@ -161,7 +186,7 @@ class ApiClient {
   }
 
   Future<List<BackendReplyTemplate>> fetchReplyTemplates() async {
-    final response = await _client.get(BackendEndpoints.cortexRepliesUri);
+    final response = await _get(BackendEndpoints.cortexRepliesUri);
     _ensureSuccess(response, 'Failed to load reply templates');
 
     final decoded = jsonDecode(response.body);
@@ -176,7 +201,7 @@ class ApiClient {
     required String body,
     String tone = 'casual',
   }) async {
-    final response = await _client.post(
+    final response = await _post(
       BackendEndpoints.cortexRepliesUri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'body': body, 'tone': tone, 'is_default': false}),
@@ -186,13 +211,13 @@ class ApiClient {
   }
 
   Future<void> deleteReplyTemplate(String id) async {
-    final response = await _client.delete(BackendEndpoints.cortexReplyByIdUri(id));
+    final response = await _delete(BackendEndpoints.cortexReplyByIdUri(id));
     if (response.statusCode == 204) return;
     _ensureSuccess(response, 'Failed to delete reply template');
   }
 
   Future<List<BackendScheduledMessage>> fetchScheduledMessages() async {
-    final response = await _client.get(BackendEndpoints.cortexScheduledUri);
+    final response = await _get(BackendEndpoints.cortexScheduledUri);
     _ensureSuccess(response, 'Failed to load scheduled messages');
 
     final decoded = jsonDecode(response.body);
@@ -208,7 +233,7 @@ class ApiClient {
     required DateTime scheduledAt,
     String notificationId = 'manual',
   }) async {
-    final response = await _client.post(
+    final response = await _post(
       BackendEndpoints.cortexScheduledUri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
@@ -222,18 +247,18 @@ class ApiClient {
   }
 
   Future<void> approveScheduledMessage(String id) async {
-    final response = await _client.put(BackendEndpoints.approveScheduledUri(id));
+    final response = await _put(BackendEndpoints.approveScheduledUri(id));
     _ensureSuccess(response, 'Failed to approve scheduled message');
   }
 
   Future<void> cancelScheduledMessage(String id) async {
-    final response = await _client.delete(BackendEndpoints.cancelScheduledUri(id));
+    final response = await _delete(BackendEndpoints.cancelScheduledUri(id));
     if (response.statusCode == 204) return;
     _ensureSuccess(response, 'Failed to cancel scheduled message');
   }
 
   Future<List<BackendActivityEntry>> fetchCortexActivity() async {
-    final response = await _client.get(BackendEndpoints.cortexActivityUri);
+    final response = await _get(BackendEndpoints.cortexActivityUri);
     _ensureSuccess(response, 'Failed to load cortex activity');
 
     final decoded = jsonDecode(response.body);
@@ -245,13 +270,13 @@ class ApiClient {
   }
 
   Future<BackendUserProfile> fetchProfile() async {
-    final response = await _client.get(BackendEndpoints.profileUri);
+    final response = await _get(BackendEndpoints.profileUri);
     _ensureSuccess(response, 'Failed to load profile');
     return BackendUserProfile.fromJson(jsonDecode(response.body));
   }
 
   Future<void> updateProfile(BackendUserProfile profile) async {
-    final response = await _client.put(
+    final response = await _put(
       BackendEndpoints.profileUri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(profile.toJson()),

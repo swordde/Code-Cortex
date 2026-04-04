@@ -47,8 +47,12 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
 
   Future<void> _loadData({String? preferredModeDisplay}) async {
     try {
-      final modes = await _apiClient.fetchModes();
-      final rules = await _apiClient.fetchRules();
+      final results = await Future.wait([
+        _apiClient.fetchModes(),
+        _apiClient.fetchRules(),
+      ]);
+      final modes = results[0] as List<BackendMode>;
+      final rules = results[1] as List<BackendRule>;
 
       if (!mounted) return;
 

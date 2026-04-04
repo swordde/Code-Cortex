@@ -389,8 +389,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadBackendState() async {
     try {
-      final profile = await _apiClient.fetchProfile();
-      final cortex = await _apiClient.fetchCortexConfig();
+      final results = await Future.wait([
+        _apiClient.fetchProfile(),
+        _apiClient.fetchCortexConfig(),
+      ]);
+      final profile = results[0] as BackendUserProfile;
+      final cortex = results[1] as BackendCortexConfig;
       if (!mounted) return;
       _store.setUserName(profile.displayName.isEmpty ? _store.userName : profile.displayName);
       setState(() {

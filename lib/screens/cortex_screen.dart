@@ -487,10 +487,16 @@ class _CortexScreenState extends State<CortexScreen> {
   }
 
   Future<void> _refreshData() async {
-    final cfg = await _apiClient.fetchCortexConfig();
-    final replies = await _apiClient.fetchReplyTemplates();
-    final scheduled = await _apiClient.fetchScheduledMessages();
-    final activity = await _apiClient.fetchCortexActivity();
+    final results = await Future.wait([
+      _apiClient.fetchCortexConfig(),
+      _apiClient.fetchReplyTemplates(),
+      _apiClient.fetchScheduledMessages(),
+      _apiClient.fetchCortexActivity(),
+    ]);
+    final cfg = results[0] as BackendCortexConfig;
+    final replies = results[1] as List<BackendReplyTemplate>;
+    final scheduled = results[2] as List<BackendScheduledMessage>;
+    final activity = results[3] as List<BackendActivityEntry>;
 
     if (!mounted) return;
     setState(() {
