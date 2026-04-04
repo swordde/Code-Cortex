@@ -14,7 +14,7 @@ class TodayNotificationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardBg = isDark ? const Color(0xFF1B5E59) : const Color(0xFF1F6F68);
+    final cardBg = const Color(0xFF0F4D52);
     final accent = const Color(0xFFF4AD2B);
 
     return Container(

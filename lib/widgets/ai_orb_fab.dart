@@ -11,9 +11,9 @@ class AiOrbFab extends StatefulWidget {
   State<AiOrbFab> createState() => _AiOrbFabState();
 }
 
-class _AiOrbFabState extends State<AiOrbFab>
-    with SingleTickerProviderStateMixin {
+class _AiOrbFabState extends State<AiOrbFab> with TickerProviderStateMixin {
   late final AnimationController _rotationController;
+  late final AnimationController _waveController;
 
   @override
   void initState() {
@@ -22,11 +22,16 @@ class _AiOrbFabState extends State<AiOrbFab>
       vsync: this,
       duration: const Duration(seconds: 22),
     )..repeat();
+    _waveController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2800),
+    )..repeat();
   }
 
   @override
   void dispose() {
     _rotationController.dispose();
+    _waveController.dispose();
     super.dispose();
   }
 
@@ -40,12 +45,28 @@ class _AiOrbFabState extends State<AiOrbFab>
         width: 78,
         height: 78,
         child: AnimatedBuilder(
-          animation: _rotationController,
+          animation: Listenable.merge([_rotationController, _waveController]),
           builder: (context, child) {
             final t = _rotationController.value;
+            final wave = _waveController.value;
             return Stack(
               alignment: Alignment.center,
               children: [
+                _WaveRing(
+                  progress: wave,
+                  baseSize: 64,
+                  color: const Color(0xFF6C5CFF),
+                ),
+                _WaveRing(
+                  progress: (wave + 0.33) % 1,
+                  baseSize: 64,
+                  color: const Color(0xFF27C8F6),
+                ),
+                _WaveRing(
+                  progress: (wave + 0.66) % 1,
+                  baseSize: 64,
+                  color: const Color(0xFFCF66FF),
+                ),
                 Container(
                   width: 64,
                   height: 64,
@@ -137,6 +158,35 @@ class _AiOrbFabState extends State<AiOrbFab>
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _WaveRing extends StatelessWidget {
+  const _WaveRing({
+    required this.progress,
+    required this.baseSize,
+    required this.color,
+  });
+
+  final double progress;
+  final double baseSize;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = 1 + (progress * 0.9);
+    final opacity = (1 - progress) * 0.35;
+    return Transform.scale(
+      scale: scale,
+      child: Container(
+        width: baseSize,
+        height: baseSize,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: color.withValues(alpha: opacity), width: 2),
         ),
       ),
     );

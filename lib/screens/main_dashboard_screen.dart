@@ -20,9 +20,11 @@ class MainDashboardScreen extends StatefulWidget {
   State<MainDashboardScreen> createState() => _MainDashboardScreenState();
 }
 
-class _MainDashboardScreenState extends State<MainDashboardScreen> {
+class _MainDashboardScreenState extends State<MainDashboardScreen>
+    with SingleTickerProviderStateMixin {
   final Random _random = Random();
   late final Timer _updatesTimer;
+  late final AnimationController _tapWaveController;
 
   final Map<NotificationCategory, List<AppNotification>>
   _notificationsByCategory = {
@@ -35,6 +37,10 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _tapWaveController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
     _seedInitialNotifications();
     _updatesTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _addIncomingNotification();
@@ -44,6 +50,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
   @override
   void dispose() {
     _updatesTimer.cancel();
+    _tapWaveController.dispose();
     super.dispose();
   }
 
@@ -155,114 +162,138 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
             MaterialPageRoute(builder: (_) => const CustomModeScreen()),
           );
         },
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 110),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 110),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  QuickFilterDot(icon: Icons.work_outline),
-                  SizedBox(width: 10),
-                  QuickFilterDot(icon: Icons.favorite_outline),
-                  SizedBox(width: 10),
-                  QuickFilterDot(icon: Icons.notifications_none),
+                  const Row(
+                    children: [
+                      QuickFilterDot(icon: Icons.work_outline),
+                      SizedBox(width: 10),
+                      QuickFilterDot(icon: Icons.favorite_outline),
+                      SizedBox(width: 10),
+                      QuickFilterDot(icon: Icons.notifications_none),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  TodayNotificationCard(
+                    needingAttention: needingAttention,
+                    focusPercent: focusPercent,
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: PriorityCard(
+                          label: 'Emergency',
+                          count: emergencyCount,
+                          subtitle: 'Needs attention now',
+                          background: isDark
+                              ? const Color(0xFF462A2A)
+                              : const Color(0xFFF8DFDF),
+                          foreground: isDark
+                              ? const Color(0xFFFF8E86)
+                              : const Color(0xFFBD3124),
+                          isLarge: true,
+                          onTap: () =>
+                              _openCategory(NotificationCategory.emergency),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: PriorityCard(
+                          label: 'High Priority',
+                          count: highCount,
+                          subtitle: 'Respond soon',
+                          background: isDark
+                              ? const Color(0xFF4A3D21)
+                              : const Color(0xFFF7ECCC),
+                          foreground: isDark
+                              ? const Color(0xFFFFC45A)
+                              : const Color(0xFFB56D00),
+                          isLarge: true,
+                          onTap: () =>
+                              _openCategory(NotificationCategory.highPriority),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: PriorityCard(
+                          label: 'Medium',
+                          count: mediumCount,
+                          subtitle: 'Keep track',
+                          background: isDark
+                              ? const Color(0xFF203A3A)
+                              : const Color(0xFFDCEEEE),
+                          foreground: isDark
+                              ? const Color(0xFF74D7D7)
+                              : const Color(0xFF1A6666),
+                          isLarge: false,
+                          onTap: () =>
+                              _openCategory(NotificationCategory.medium),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: PriorityCard(
+                          label: 'Low',
+                          count: lowCount,
+                          subtitle: 'No hurry',
+                          background: isDark
+                              ? const Color(0xFF2D3033)
+                              : const Color(0xFFEDEDED),
+                          foreground: isDark
+                              ? const Color(0xFFBCC2C7)
+                              : const Color(0xFF767676),
+                          isLarge: false,
+                          onTap: () => _openCategory(NotificationCategory.low),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  WellbeingSection(
+                    total: total,
+                    urgent: emergencyCount,
+                    weeklyDeltaPercent: -23,
+                    isDark: isDark,
+                  ),
                 ],
               ),
-              const SizedBox(height: 14),
-              TodayNotificationCard(
-                needingAttention: needingAttention,
-                focusPercent: focusPercent,
-                isDark: isDark,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: PriorityCard(
-                      label: 'Emergency',
-                      count: emergencyCount,
-                      subtitle: 'Needs attention now',
-                      background: isDark
-                          ? const Color(0xFF462A2A)
-                          : const Color(0xFFF8DFDF),
-                      foreground: isDark
-                          ? const Color(0xFFFF8E86)
-                          : const Color(0xFFBD3124),
-                      isLarge: true,
-                      onTap: () =>
-                          _openCategory(NotificationCategory.emergency),
+            ),
+            IgnorePointer(
+              child: AnimatedBuilder(
+                animation: _tapWaveController,
+                builder: (context, _) {
+                  if (_tapWaveController.value == 0) {
+                    return const SizedBox.shrink();
+                  }
+                  return SizedBox.expand(
+                    child: CustomPaint(
+                      painter: _ScreenWavePainter(
+                        progress: _tapWaveController.value,
+                        isDark: isDark,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: PriorityCard(
-                      label: 'High Priority',
-                      count: highCount,
-                      subtitle: 'Respond soon',
-                      background: isDark
-                          ? const Color(0xFF4A3D21)
-                          : const Color(0xFFF7ECCC),
-                      foreground: isDark
-                          ? const Color(0xFFFFC45A)
-                          : const Color(0xFFB56D00),
-                      isLarge: true,
-                      onTap: () =>
-                          _openCategory(NotificationCategory.highPriority),
-                    ),
-                  ),
-                ],
+                  );
+                },
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: PriorityCard(
-                      label: 'Medium',
-                      count: mediumCount,
-                      subtitle: 'Keep track',
-                      background: isDark
-                          ? const Color(0xFF203A3A)
-                          : const Color(0xFFDCEEEE),
-                      foreground: isDark
-                          ? const Color(0xFF74D7D7)
-                          : const Color(0xFF1A6666),
-                      isLarge: false,
-                      onTap: () => _openCategory(NotificationCategory.medium),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: PriorityCard(
-                      label: 'Low',
-                      count: lowCount,
-                      subtitle: 'No hurry',
-                      background: isDark
-                          ? const Color(0xFF2D3033)
-                          : const Color(0xFFEDEDED),
-                      foreground: isDark
-                          ? const Color(0xFFBCC2C7)
-                          : const Color(0xFF767676),
-                      isLarge: false,
-                      onTap: () => _openCategory(NotificationCategory.low),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              WellbeingSection(
-                total: total,
-                urgent: emergencyCount,
-                weeklyDeltaPercent: -23,
-                isDark: isDark,
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: AiOrbFab(
         onTap: () {
+          _tapWaveController.forward(from: 0);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('AI assistant quick action')),
           );
@@ -282,5 +313,40 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
         ),
       ),
     );
+  }
+}
+
+class _ScreenWavePainter extends CustomPainter {
+  _ScreenWavePainter({required this.progress, required this.isDark});
+
+  final double progress;
+  final bool isDark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height - 72);
+    final maxRadius = size.longestSide * 0.95;
+
+    final outer = Paint()
+      ..color = (isDark ? const Color(0xFF8A3FFC) : const Color(0xFF6F4EFF))
+          .withValues(alpha: (1 - progress) * 0.16)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5;
+    final inner = Paint()
+      ..color = const Color(0xFF30D6FF).withValues(alpha: (1 - progress) * 0.18)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3;
+    final glow = Paint()
+      ..color = const Color(0xFFD05BFF).withValues(alpha: (1 - progress) * 0.08)
+      ..style = PaintingStyle.fill;
+
+    canvas.drawCircle(center, maxRadius * progress, outer);
+    canvas.drawCircle(center, maxRadius * (progress * 0.8), inner);
+    canvas.drawCircle(center, maxRadius * (progress * 0.55), glow);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScreenWavePainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.isDark != isDark;
   }
 }

@@ -16,7 +16,7 @@ class WellbeingSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final panel = isDark ? const Color(0xFF1A6760) : const Color(0xFF1F6F68);
+    final panel = const Color(0xFF0F4D52);
     final surface = isDark ? const Color(0xFF23262A) : Colors.white;
     final softText = isDark ? const Color(0xFFB8C0C2) : const Color(0xFF7B8086);
     final mainText = isDark ? const Color(0xFFEAF0F1) : const Color(0xFF202326);

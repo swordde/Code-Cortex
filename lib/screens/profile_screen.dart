@@ -16,7 +16,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = isDark ? const Color(0xFF1D2225) : Colors.white;
     final subtle = isDark ? const Color(0xFFAAB4BA) : const Color(0xFF7A8288);
-    final accent = const Color(0xFF1F6F68);
+    final accent = const Color(0xFF0F4D52);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),

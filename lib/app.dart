@@ -10,13 +10,13 @@ class CortexApp extends StatelessWidget {
     return MaterialApp(
       title: 'Cortex',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1F6F68)),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0F4D52)),
         scaffoldBackgroundColor: const Color(0xFFF2F2F2),
         useMaterial3: true,
       ),
       darkTheme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1F6F68),
+          seedColor: const Color(0xFF0F4D52),
           brightness: Brightness.dark,
         ),
         scaffoldBackgroundColor: const Color(0xFF111315),
