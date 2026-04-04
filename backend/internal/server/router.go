@@ -1,168 +1,645 @@
 package server
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
-	"errors"
+	"io"
 	"log"
 	"net/http"
-	"strings"
+	"os"
+	"path/filepath"
 	"time"
 
-	"cortex/backend/internal/analytics"
-	"cortex/backend/internal/auth"
-	"cortex/backend/internal/dispatch"
+	"cortex/backend/internal/config"
 	"cortex/backend/internal/models"
-	"cortex/backend/internal/modes"
-	"cortex/backend/internal/orchestrator"
-	"cortex/backend/internal/rules"
+	"cortex/backend/internal/services"
+	"cortex/backend/internal/store"
+
+	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type API struct {
-	orchestrator *orchestrator.Orchestrator
-	rules        *rules.Engine
-	modes        *modes.Manager
-	dispatcher   *dispatch.Dispatcher
-	auth         *auth.Service
-	analytics    *analytics.Writer
+	cfg        config.Config
+	store      *store.MongoStore
+	classifier *services.ClassifierService
+	analytics  *services.AnalyticsService
+	modes      *services.ModeManager
+	cortex     *services.CortexService
+	dispatcher *services.PushDispatcher
+	upgrader   websocket.Upgrader
 }
 
 func NewAPI(
-	orc *orchestrator.Orchestrator,
-	rulesEngine *rules.Engine,
-	modeManager *modes.Manager,
-	dispatcher *dispatch.Dispatcher,
-	authService *auth.Service,
-	analyticsWriter *analytics.Writer,
+	cfg config.Config,
+	s *store.MongoStore,
+	classifier *services.ClassifierService,
+	analytics *services.AnalyticsService,
+	modeManager *services.ModeManager,
+	cortex *services.CortexService,
+	dispatcher *services.PushDispatcher,
 ) *API {
 	return &API{
-		orchestrator: orc,
-		rules:        rulesEngine,
-		modes:        modeManager,
-		dispatcher:   dispatcher,
-		auth:         authService,
-		analytics:    analyticsWriter,
+		cfg:        cfg,
+		store:      s,
+		classifier: classifier,
+		analytics:  analytics,
+		modes:      modeManager,
+		cortex:     cortex,
+		dispatcher: dispatcher,
+		upgrader:   websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
 	}
 }
 
 func (a *API) Routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /v1/health", a.handleHealth)
-	mux.HandleFunc("POST /v1/ingest", a.handleIngest)
-	mux.HandleFunc("GET /v1/rules", a.handleListRules)
-	mux.HandleFunc("POST /v1/rules", a.handleAddRule)
-	mux.HandleFunc("GET /v1/mode", a.handleGetMode)
-	mux.HandleFunc("PUT /v1/mode", a.handleSetMode)
-	mux.HandleFunc("POST /v1/auth/voice-signature", a.handleStoreVoiceSignature)
-	mux.HandleFunc("POST /v1/auth/token", a.handleCreateToken)
-	return jsonMiddleware(mux)
+	mux.HandleFunc("GET /ws", a.handleWS)
+	mux.HandleFunc("POST /api/notifications/ingest", a.handleIngest)
+	mux.HandleFunc("GET /api/notifications", a.handleListNotifications)
+	mux.HandleFunc("GET /api/notifications/{id}", a.handleGetNotification)
+	mux.HandleFunc("PUT /api/notifications/{id}/read", a.handleMarkRead)
+	mux.HandleFunc("PUT /api/notifications/{id}/action", a.handleMarkActioned)
+	mux.HandleFunc("DELETE /api/notifications/{id}", a.handleDismiss)
+	mux.HandleFunc("GET /api/analytics", a.handleAnalytics)
+	mux.HandleFunc("GET /api/modes", a.handleListModes)
+	mux.HandleFunc("GET /api/modes/active", a.handleGetActiveMode)
+	mux.HandleFunc("POST /api/modes", a.handleCreateMode)
+	mux.HandleFunc("PUT /api/modes/{id}", a.handleUpdateMode)
+	mux.HandleFunc("PUT /api/modes/{id}/activate", a.handleActivateMode)
+	mux.HandleFunc("DELETE /api/modes/{id}", a.handleDeleteMode)
+	mux.HandleFunc("GET /api/rules", a.handleListRules)
+	mux.HandleFunc("POST /api/rules", a.handleCreateRule)
+	mux.HandleFunc("PUT /api/rules/{id}", a.handleUpdateRule)
+	mux.HandleFunc("DELETE /api/rules/{id}", a.handleDeleteRule)
+	mux.HandleFunc("PUT /api/rules/reorder", a.handleReorderRules)
+	mux.HandleFunc("GET /api/cortex/config", a.handleGetCortexConfig)
+	mux.HandleFunc("PUT /api/cortex/config", a.handleUpdateCortexConfig)
+	mux.HandleFunc("GET /api/cortex/replies", a.handleListReplies)
+	mux.HandleFunc("POST /api/cortex/replies", a.handleCreateReply)
+	mux.HandleFunc("PUT /api/cortex/replies/{id}", a.handleUpdateReply)
+	mux.HandleFunc("DELETE /api/cortex/replies/{id}", a.handleDeleteReply)
+	mux.HandleFunc("GET /api/cortex/scheduled", a.handleListScheduled)
+	mux.HandleFunc("PUT /api/cortex/scheduled/{id}/approve", a.handleApproveScheduled)
+	mux.HandleFunc("DELETE /api/cortex/scheduled/{id}", a.handleCancelScheduled)
+	mux.HandleFunc("GET /api/cortex/activity", a.handleListActivity)
+	mux.HandleFunc("POST /api/cortex/voice/enroll", a.handleVoiceEnroll)
+	mux.HandleFunc("POST /api/cortex/voice/verify", a.handleVoiceVerify)
+	mux.HandleFunc("GET /api/profile", a.handleGetProfile)
+	mux.HandleFunc("PUT /api/profile", a.handleUpdateProfile)
+	mux.HandleFunc("POST /api/profile/avatar", a.handleUploadAvatar)
+	return corsMiddleware(mux)
 }
 
-func (a *API) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "time": time.Now().UTC().Format(time.RFC3339)})
+func (a *API) handleWS(w http.ResponseWriter, r *http.Request) {
+	conn, err := a.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "websocket upgrade failed", "BAD_REQUEST")
+		return
+	}
+	a.dispatcher.AddConn(conn)
+	go func() {
+		defer a.dispatcher.RemoveConn(conn)
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
 }
 
 func (a *API) handleIngest(w http.ResponseWriter, r *http.Request) {
 	var n models.Notification
 	if err := json.NewDecoder(r.Body).Decode(&n); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		writeError(w, http.StatusBadRequest, "invalid json body", "VALIDATION_ERROR")
 		return
 	}
-	if n.ReceivedAt.IsZero() {
-		n.ReceivedAt = time.Now().UTC()
-	}
-	if n.Platform == "" {
-		n.Platform = "unknown"
+	if n.Content == "" || n.AppPackage == "" {
+		writeError(w, http.StatusBadRequest, "content and app_package are required", "VALIDATION_ERROR")
+		return
 	}
 
-	result, err := a.orchestrator.Process(r.Context(), n)
+	n.ID = uuid.NewString()
+	n.Timestamp = time.Now().UTC()
+	n.IsRead = false
+	n.IsActioned = false
+
+	activeMode, err := a.modes.GetActive(r.Context())
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "classification failed"})
+		writeError(w, http.StatusInternalServerError, "failed to resolve active mode", "INTERNAL_ERROR")
 		return
 	}
 
-	dispatchErr := a.dispatcher.Dispatch(n, result)
-	dispatched := dispatchErr == nil
-	if dispatchErr != nil && !errors.Is(dispatchErr, netErrNoTargets{}) {
-		log.Printf("dispatch warning: %v", dispatchErr)
+	p, conf, reason, err := a.classifier.Classify(r.Context(), &n, activeMode.Name)
+	if err != nil {
+		log.Printf("classifier warning: %v", err)
+	}
+	n.Priority = p
+	n.Confidence = conf
+	n.LabelReason = reason
+
+	rules, err := a.store.ListRules(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed loading rules", "INTERNAL_ERROR")
+		return
+	}
+	finalPriority, finalReason := services.ApplyRules(&n, rules, activeMode)
+	n.Priority = finalPriority
+	n.Mode = activeMode.Name
+	if finalReason != "" {
+		n.LabelReason = finalReason
 	}
 
-	a.analytics.Enqueue(analytics.Event{Notification: n, Result: result})
-	writeJSON(w, http.StatusOK, models.IngestResponse{Result: result, Dispatched: dispatched})
+	if err := a.store.SaveNotification(r.Context(), &n); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to save notification", "INTERNAL_ERROR")
+		return
+	}
+	a.dispatcher.DispatchNotification(&n)
+
+	cfg, err := a.store.GetCortexConfig(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed loading cortex config", "INTERNAL_ERROR")
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := a.cortex.MaybeAutoReply(ctx, &n, cfg); err != nil {
+			log.Printf("cortex async warning: %v", err)
+		}
+	}()
+
+	writeJSON(w, http.StatusCreated, n)
 }
 
-type netErrNoTargets struct{}
+func (a *API) handleListNotifications(w http.ResponseWriter, r *http.Request) {
+	items, err := a.store.ListNotifications(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list notifications", "INTERNAL_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
 
-func (netErrNoTargets) Error() string { return "no dispatch targets configured" }
+func (a *API) handleGetNotification(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	n, err := a.store.GetNotification(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch notification", "INTERNAL_ERROR")
+		return
+	}
+	if n == nil {
+		writeError(w, http.StatusNotFound, "notification not found", "NOT_FOUND")
+		return
+	}
+	writeJSON(w, http.StatusOK, n)
+}
+
+func (a *API) handleMarkRead(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	err := a.store.MarkRead(r.Context(), id)
+	if err == mongo.ErrNoDocuments {
+		writeError(w, http.StatusNotFound, "notification not found", "NOT_FOUND")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to mark read", "INTERNAL_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (a *API) handleMarkActioned(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	err := a.store.MarkActioned(r.Context(), id)
+	if err == mongo.ErrNoDocuments {
+		writeError(w, http.StatusNotFound, "notification not found", "NOT_FOUND")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to mark actioned", "INTERNAL_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (a *API) handleDismiss(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	err := a.store.SoftDeleteNotification(r.Context(), id)
+	if err == mongo.ErrNoDocuments {
+		writeError(w, http.StatusNotFound, "notification not found", "NOT_FOUND")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to dismiss notification", "INTERNAL_ERROR")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) handleAnalytics(w http.ResponseWriter, r *http.Request) {
+	rangeStr := r.URL.Query().Get("range")
+	if rangeStr == "" {
+		writeError(w, http.StatusBadRequest, "range query param is required", "VALIDATION_ERROR")
+		return
+	}
+	resp, err := a.analytics.GetAnalytics(r.Context(), rangeStr)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to compute analytics", "INTERNAL_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (a *API) handleListModes(w http.ResponseWriter, r *http.Request) {
+	items, err := a.store.ListModes(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list modes", "INTERNAL_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (a *API) handleGetActiveMode(w http.ResponseWriter, r *http.Request) {
+	mode, err := a.modes.GetActive(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch active mode", "INTERNAL_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusOK, mode)
+}
+
+func (a *API) handleCreateMode(w http.ResponseWriter, r *http.Request) {
+	var mode models.Mode
+	if err := json.NewDecoder(r.Body).Decode(&mode); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json body", "VALIDATION_ERROR")
+		return
+	}
+	if mode.Name == "" {
+		writeError(w, http.StatusBadRequest, "name is required", "VALIDATION_ERROR")
+		return
+	}
+	mode.ID = uuid.NewString()
+	mode.IsPreset = false
+	mode.IsActive = false
+	if err := a.store.CreateMode(r.Context(), &mode); err != nil {
+		writeError(w, http.StatusConflict, "mode already exists", "CONFLICT")
+		return
+	}
+	writeJSON(w, http.StatusCreated, mode)
+}
+
+func (a *API) handleUpdateMode(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	existing, err := a.store.GetModeByID(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch mode", "INTERNAL_ERROR")
+		return
+	}
+	if existing == nil {
+		writeError(w, http.StatusNotFound, "mode not found", "NOT_FOUND")
+		return
+	}
+	var mode models.Mode
+	if err := json.NewDecoder(r.Body).Decode(&mode); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json body", "VALIDATION_ERROR")
+		return
+	}
+	mode.ID = existing.ID
+	mode.IsPreset = existing.IsPreset
+	if existing.IsPreset {
+		mode.Name = existing.Name
+	}
+	if err := a.store.UpdateMode(r.Context(), id, &mode); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update mode", "INTERNAL_ERROR")
+		return
+	}
+	updated, _ := a.store.GetModeByID(r.Context(), id)
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (a *API) handleActivateMode(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := a.modes.SetActive(r.Context(), id); err == mongo.ErrNoDocuments {
+		writeError(w, http.StatusNotFound, "mode not found", "NOT_FOUND")
+		return
+	} else if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to activate mode", "INTERNAL_ERROR")
+		return
+	}
+	active, _ := a.modes.GetActive(r.Context())
+	writeJSON(w, http.StatusOK, active)
+}
+
+func (a *API) handleDeleteMode(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	err := a.store.DeleteMode(r.Context(), id)
+	if err == mongo.ErrNoDocuments {
+		writeError(w, http.StatusNotFound, "mode not found", "NOT_FOUND")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusConflict, "cannot delete preset mode", "CONFLICT")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
 
 func (a *API) handleListRules(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"rules": a.rules.List()})
-}
-
-func (a *API) handleAddRule(w http.ResponseWriter, r *http.Request) {
-	var rule models.Rule
-	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	rules, err := a.store.ListRules(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list rules", "INTERNAL_ERROR")
 		return
 	}
-	if rule.ID == "" {
-		rule.ID = time.Now().UTC().Format("20060102150405.000000")
+	writeJSON(w, http.StatusOK, rules)
+}
+
+func (a *API) handleCreateRule(w http.ResponseWriter, r *http.Request) {
+	var rule models.Rule
+	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json body", "VALIDATION_ERROR")
+		return
 	}
-	if rule.Priority == "" {
-		rule.Priority = models.PriorityHigh
+	rule.ID = uuid.NewString()
+	if rule.Order == 0 {
+		nextOrder, err := a.store.NextRuleOrder(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to allocate rule order", "INTERNAL_ERROR")
+			return
+		}
+		rule.Order = nextOrder
 	}
-	rule.Enabled = true
-	a.rules.Add(rule)
+	if err := a.store.CreateRule(r.Context(), &rule); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create rule", "INTERNAL_ERROR")
+		return
+	}
 	writeJSON(w, http.StatusCreated, rule)
 }
 
-func (a *API) handleGetMode(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"mode": string(a.modes.Get())})
+func (a *API) handleUpdateRule(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var rule models.Rule
+	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json body", "VALIDATION_ERROR")
+		return
+	}
+	rule.ID = id
+	if err := a.store.UpdateRule(r.Context(), id, &rule); err == mongo.ErrNoDocuments {
+		writeError(w, http.StatusNotFound, "rule not found", "NOT_FOUND")
+		return
+	} else if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update rule", "INTERNAL_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusOK, rule)
 }
 
-func (a *API) handleSetMode(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Mode string `json:"mode"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+func (a *API) handleDeleteRule(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := a.store.DeleteRule(r.Context(), id); err == mongo.ErrNoDocuments {
+		writeError(w, http.StatusNotFound, "rule not found", "NOT_FOUND")
+		return
+	} else if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete rule", "INTERNAL_ERROR")
 		return
 	}
-	mode := models.ContextMode(strings.ToLower(req.Mode))
-	a.modes.Set(mode)
-	writeJSON(w, http.StatusOK, map[string]string{"mode": string(a.modes.Get())})
+	w.WriteHeader(http.StatusNoContent)
 }
 
-func (a *API) handleStoreVoiceSignature(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		UserID        string `json:"userId"`
-		SignatureHash string `json:"signatureHash"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+func (a *API) handleReorderRules(w http.ResponseWriter, r *http.Request) {
+	var body []map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json body", "VALIDATION_ERROR")
 		return
 	}
-	if req.UserID == "" || req.SignatureHash == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "userId and signatureHash are required"})
+	if err := a.store.ReorderRules(r.Context(), body); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to reorder rules", "INTERNAL_ERROR")
 		return
 	}
-	sig := a.auth.StoreVoiceSignature(req.UserID, req.SignatureHash)
-	writeJSON(w, http.StatusCreated, sig)
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-func (a *API) handleCreateToken(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		UserID string `json:"userId"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+func (a *API) handleGetCortexConfig(w http.ResponseWriter, r *http.Request) {
+	cfg, err := a.store.GetCortexConfig(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load cortex config", "INTERNAL_ERROR")
 		return
 	}
-	if req.UserID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "userId is required"})
+	writeJSON(w, http.StatusOK, cfg)
+}
+
+func (a *API) handleUpdateCortexConfig(w http.ResponseWriter, r *http.Request) {
+	var cfg models.CortexConfig
+	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json body", "VALIDATION_ERROR")
 		return
 	}
-	token := a.auth.CreateActivationToken(req.UserID, 24*time.Hour)
-	writeJSON(w, http.StatusCreated, map[string]string{"token": token})
+	if err := a.store.UpdateCortexConfig(r.Context(), &cfg); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update cortex config", "INTERNAL_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusOK, cfg)
+}
+
+func (a *API) handleListReplies(w http.ResponseWriter, r *http.Request) {
+	items, err := a.store.ListReplyTemplates(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list reply templates", "INTERNAL_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (a *API) handleCreateReply(w http.ResponseWriter, r *http.Request) {
+	var item models.ReplyTemplate
+	if err := json.NewDecoder(r.Body).Decode(&item); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json body", "VALIDATION_ERROR")
+		return
+	}
+	item.ID = uuid.NewString()
+	if err := a.store.CreateReplyTemplate(r.Context(), &item); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create reply template", "INTERNAL_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func (a *API) handleUpdateReply(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var item models.ReplyTemplate
+	if err := json.NewDecoder(r.Body).Decode(&item); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json body", "VALIDATION_ERROR")
+		return
+	}
+	item.ID = id
+	if err := a.store.UpdateReplyTemplate(r.Context(), id, &item); err == mongo.ErrNoDocuments {
+		writeError(w, http.StatusNotFound, "template not found", "NOT_FOUND")
+		return
+	} else if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update template", "INTERNAL_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (a *API) handleDeleteReply(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := a.store.DeleteReplyTemplate(r.Context(), id); err == mongo.ErrNoDocuments {
+		writeError(w, http.StatusNotFound, "template not found", "NOT_FOUND")
+		return
+	} else if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete template", "INTERNAL_ERROR")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) handleListScheduled(w http.ResponseWriter, r *http.Request) {
+	items, err := a.store.ListScheduledPending(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list scheduled messages", "INTERNAL_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (a *API) handleApproveScheduled(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := a.store.SetScheduledStatus(r.Context(), id, "sent"); err == mongo.ErrNoDocuments {
+		writeError(w, http.StatusNotFound, "scheduled message not found", "NOT_FOUND")
+		return
+	} else if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to approve scheduled message", "INTERNAL_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (a *API) handleCancelScheduled(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := a.store.SetScheduledStatus(r.Context(), id, "cancelled"); err == mongo.ErrNoDocuments {
+		writeError(w, http.StatusNotFound, "scheduled message not found", "NOT_FOUND")
+		return
+	} else if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to cancel scheduled message", "INTERNAL_ERROR")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) handleListActivity(w http.ResponseWriter, r *http.Request) {
+	items, err := a.store.ListCortexActivity(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list cortex activity", "INTERNAL_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (a *API) handleVoiceEnroll(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body", "VALIDATION_ERROR")
+		return
+	}
+	resp, callErr := a.forwardAI(r.Context(), "/voice/enroll", body)
+	if callErr != nil {
+		writeError(w, http.StatusBadGateway, "voice enroll service unavailable", "UPSTREAM_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (a *API) handleVoiceVerify(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body", "VALIDATION_ERROR")
+		return
+	}
+	resp, callErr := a.forwardAI(r.Context(), "/voice/verify", body)
+	if callErr != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"matched": false, "confidence": 0.0})
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (a *API) handleGetProfile(w http.ResponseWriter, r *http.Request) {
+	p, err := a.store.GetProfile(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load profile", "INTERNAL_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+func (a *API) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
+	var profile models.UserProfile
+	if err := json.NewDecoder(r.Body).Decode(&profile); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json body", "VALIDATION_ERROR")
+		return
+	}
+	if err := a.store.UpdateProfile(r.Context(), &profile); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update profile", "INTERNAL_ERROR")
+		return
+	}
+	writeJSON(w, http.StatusOK, profile)
+}
+
+func (a *API) handleUploadAvatar(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid multipart form", "VALIDATION_ERROR")
+		return
+	}
+	file, header, err := r.FormFile("avatar")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "avatar file is required", "VALIDATION_ERROR")
+		return
+	}
+	defer file.Close()
+
+	if err := os.MkdirAll(a.cfg.AvatarDir, 0o755); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create avatar directory", "INTERNAL_ERROR")
+		return
+	}
+	filename := uuid.NewString() + filepath.Ext(header.Filename)
+	path := filepath.Join(a.cfg.AvatarDir, filename)
+	dst, err := os.Create(path)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to save avatar", "INTERNAL_ERROR")
+		return
+	}
+	defer dst.Close()
+	if _, err := io.Copy(dst, file); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to persist avatar", "INTERNAL_ERROR")
+		return
+	}
+	p, err := a.store.GetProfile(r.Context())
+	if err == nil && p != nil {
+		p.AvatarPath = path
+		_ = a.store.UpdateProfile(r.Context(), p)
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"avatar_path": path})
+}
+
+func (a *API) forwardAI(ctx context.Context, endpoint string, body []byte) (map[string]any, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.cfg.AIServiceURL+endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var payload map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, err
+	}
+	return payload, nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
@@ -171,12 +648,18 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-func jsonMiddleware(next http.Handler) http.Handler {
+func writeError(w http.ResponseWriter, status int, msg, code string) {
+	writeJSON(w, status, map[string]string{"error": msg, "code": code})
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch {
-			if r.Header.Get("Content-Type") == "" {
-				r.Header.Set("Content-Type", "application/json")
-			}
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
 		}
 		next.ServeHTTP(w, r)
 	})

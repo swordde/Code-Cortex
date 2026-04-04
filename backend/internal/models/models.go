@@ -134,13 +134,13 @@ type FinetuneEvent struct {
 }
 
 type AnalyticsResponse struct {
-	Range                string         `json:"range"`
-	Total                int            `json:"total"`
-	ByPriority           map[string]int `json:"by_priority"`
-	DailyCounts          []DailyCount   `json:"daily_counts"`
-	CortexDelegationRate float64        `json:"cortex_delegation_rate"`
-	TopSources           []TopSource    `json:"top_sources"`
-	ModeUsageMinutes     map[string]int `json:"mode_usage_minutes"`
+	Range                string          `json:"range"`
+	Total                int             `json:"total"`
+	ByPriority           map[string]int  `json:"by_priority"`
+	DailyCounts          []DailyCount    `json:"daily_counts"`
+	CortexDelegationRate float64         `json:"cortex_delegation_rate"`
+	TopSources           []TopSource     `json:"top_sources"`
+	ModeUsageMinutes     map[string]int  `json:"mode_usage_minutes"`
 	FinetuneEvents       []FinetuneEvent `json:"finetune_events"`
 }
 

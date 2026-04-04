@@ -8,39 +8,40 @@ import (
 	"syscall"
 	"time"
 
-	"cortex/backend/internal/ai"
-	"cortex/backend/internal/analytics"
-	"cortex/backend/internal/auth"
 	"cortex/backend/internal/config"
-	"cortex/backend/internal/dispatch"
-	"cortex/backend/internal/modes"
-	"cortex/backend/internal/orchestrator"
-	"cortex/backend/internal/rules"
 	"cortex/backend/internal/server"
+	"cortex/backend/internal/services"
+	"cortex/backend/internal/store"
 )
 
 func main() {
-	cfg := config.FromEnv()
+	cfg := config.Load()
 
-	rulesEngine := rules.NewEngine()
-	modeManager := modes.NewManager()
-	aiClient := ai.NewClient(cfg.AIEndpoint)
-	orc := orchestrator.New(aiClient, rulesEngine, modeManager, cfg.ClassificationTries)
-	dispatcher := dispatch.NewDispatcher(cfg.FlutterDispatchURL, cfg.QuickShellSocket)
-	authService := auth.NewService(cfg.ActivationSecret)
-
-	analyticsWriter, err := analytics.NewWriter(cfg.SQLitePath)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	mongoStore, err := store.NewMongoStore(ctx, cfg.MongoURI, cfg.MongoDBName)
 	if err != nil {
-		log.Fatalf("failed to initialize analytics sqlite: %v", err)
+		log.Fatalf("failed connecting MongoDB: %v", err)
 	}
 	defer func() {
-		_ = analyticsWriter.Close()
+		closeCtx, closeCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer closeCancel()
+		_ = mongoStore.Close(closeCtx)
 	}()
 
-	api := server.NewAPI(orc, rulesEngine, modeManager, dispatcher, authService, analyticsWriter)
+	dispatcher := services.NewPushDispatcher(cfg.UnixSocketPath)
+	classifier := services.NewClassifierService(cfg.AIServiceURL)
+	analyticsService := services.NewAnalyticsService(mongoStore)
+	modeManager := services.NewModeManager(mongoStore, dispatcher)
+	if err := modeManager.Init(context.Background()); err != nil {
+		log.Fatalf("failed to initialize mode manager: %v", err)
+	}
+	cortexService := services.NewCortexService(mongoStore, dispatcher, cfg.AIServiceURL)
+
+	api := server.NewAPI(cfg, mongoStore, classifier, analyticsService, modeManager, cortexService, dispatcher)
 
 	httpServer := &http.Server{
-		Addr:         cfg.ListenAddr,
+		Addr:         cfg.Port,
 		Handler:      api.Routes(),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 5 * time.Second,
@@ -51,7 +52,7 @@ func main() {
 	defer stop()
 
 	go func() {
-		log.Printf("cortex backend listening on %s", cfg.ListenAddr)
+		log.Printf("cortex backend listening on %s", cfg.Port)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("http server failed: %v", err)
 		}
