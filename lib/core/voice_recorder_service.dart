@@ -15,11 +15,7 @@ class VoiceRecorderService {
     final filePath = '${dir.path}/$filePrefix-${DateTime.now().millisecondsSinceEpoch}.m4a';
 
     await _recorder.start(
-      const RecordConfig(
-        encoder: AudioEncoder.aacLc,
-        sampleRate: 44100,
-        numChannels: 1,
-      ),
+      const RecordConfig(),
       path: filePath,
     );
 

@@ -133,7 +133,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     );
   }
 
-  void _createAccount() {
+  Future<void> _createAccount() async {
     final trimmedName = _nameController.text.trim();
     if (trimmedName.isEmpty) {
       ScaffoldMessenger.of(
@@ -197,30 +197,37 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       return;
     }
 
-    final filePath = await _recorderService.startRecording(
-      filePrefix: 'primary-voice',
-    );
+    try {
+      final filePath = await _recorderService.startRecording(
+        filePrefix: 'primary-voice',
+      );
 
-    if (!mounted) return;
-
-    _timer?.cancel();
-    setState(() {
-      _isRecording = true;
-      _voiceRecorded = false;
-      _recordedDuration = 0;
-      _recordedFilePath = filePath;
-    });
-
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       if (!mounted) return;
-      final next = _recordedDuration + 1;
+
+      _timer?.cancel();
       setState(() {
-        _recordedDuration = next;
+        _isRecording = true;
+        _voiceRecorded = false;
+        _recordedDuration = 0;
+        _recordedFilePath = filePath;
       });
-      if (next >= 10) {
-        await _stopRecording();
-      }
-    });
+
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+        if (!mounted) return;
+        final next = _recordedDuration + 1;
+        setState(() {
+          _recordedDuration = next;
+        });
+        if (next >= 10) {
+          await _stopRecording();
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to record. Try again.')),
+      );
+    }
   }
 
   Future<void> _stopRecording() async {

@@ -357,6 +357,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
       return;
     }
+    final recordedPath = filePath;
 
     final safeLabel = label.isEmpty
         ? 'Extra voice ${_store.voices.length}'
@@ -364,11 +365,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _store.addExtraVoice(
       label: safeLabel,
       durationSeconds: 10,
-      filePath: filePath,
+      filePath: recordedPath,
     );
 
     unawaited(
-      _apiClient.enrollVoiceSample(filePath: filePath, label: safeLabel),
+      _apiClient.enrollVoiceSample(filePath: recordedPath, label: safeLabel),
     );
 
     if (!mounted) return;
