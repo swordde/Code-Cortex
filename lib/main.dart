@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:math';
 
 void main() {
   runApp(const MyApp());
@@ -7,116 +9,469 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Cortex',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1F6F68)),
+        scaffoldBackgroundColor: const Color(0xFFF2F2F2),
+        useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'chaddi mithun'),
+      home: const MainDashboardScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+enum NotificationCategory { emergency, highPriority, medium, low }
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
+class AppNotification {
+  const AppNotification({
+    required this.title,
+    required this.source,
+    required this.urgencyScore,
+    required this.userRuleBoost,
+    required this.createdAt,
+  });
 
   final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  final String source;
+  final int urgencyScore;
+  final int userRuleBoost;
+  final DateTime createdAt;
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class MainDashboardScreen extends StatefulWidget {
+  const MainDashboardScreen({super.key});
 
-  void _incrementCounter() {
+  @override
+  State<MainDashboardScreen> createState() => _MainDashboardScreenState();
+}
+
+class _MainDashboardScreenState extends State<MainDashboardScreen> {
+  final Random _random = Random();
+  late final Timer _updatesTimer;
+
+  final Map<NotificationCategory, List<AppNotification>>
+  _notificationsByCategory = {
+    NotificationCategory.emergency: [],
+    NotificationCategory.highPriority: [],
+    NotificationCategory.medium: [],
+    NotificationCategory.low: [],
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _seedInitialNotifications();
+    _updatesTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _addIncomingNotification();
+    });
+  }
+
+  @override
+  void dispose() {
+    _updatesTimer.cancel();
+    super.dispose();
+  }
+
+  void _seedInitialNotifications() {
+    final initialNotifications = [
+      _makeNotification('Card transaction alert', 93, 5),
+      _makeNotification('Missed medication reminder', 88, 8),
+      _makeNotification('Team message: review needed', 74, 3),
+      _makeNotification('Calendar task update', 59, 2),
+      _makeNotification('App update available', 34, 0),
+      _makeNotification('Marketing email summary', 22, 0),
+    ];
+
+    for (final item in initialNotifications) {
+      final category = _categorize(item);
+      _notificationsByCategory[category]!.add(item);
+    }
+  }
+
+  AppNotification _makeNotification(String title, int urgency, int ruleBoost) {
+    final sources = ['Bank', 'Health', 'Work', 'Social', 'System'];
+    return AppNotification(
+      title: title,
+      source: sources[_random.nextInt(sources.length)],
+      urgencyScore: urgency,
+      userRuleBoost: ruleBoost,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  NotificationCategory _categorize(AppNotification notification) {
+    final finalScore = notification.urgencyScore + notification.userRuleBoost;
+    if (finalScore >= 90) return NotificationCategory.emergency;
+    if (finalScore >= 70) return NotificationCategory.highPriority;
+    if (finalScore >= 45) return NotificationCategory.medium;
+    return NotificationCategory.low;
+  }
+
+  void _addIncomingNotification() {
+    if (!mounted) return;
+
+    final templates = [
+      'Payment due in 1 hour',
+      'Meeting starts in 15 minutes',
+      'Sleep goal reminder',
+      'Delivery arriving soon',
+      'Low battery warning',
+      'Family message waiting',
+    ];
+
+    final urgency = 20 + _random.nextInt(76);
+    final ruleBoost = _random.nextInt(16);
+    final created = _makeNotification(
+      templates[_random.nextInt(templates.length)],
+      urgency,
+      ruleBoost,
+    );
+    final category = _categorize(created);
+
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _notificationsByCategory[category]!.insert(0, created);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    final emergencyCount =
+        _notificationsByCategory[NotificationCategory.emergency]!.length;
+    final highCount =
+        _notificationsByCategory[NotificationCategory.highPriority]!.length;
+    final mediumCount =
+        _notificationsByCategory[NotificationCategory.medium]!.length;
+    final lowCount = _notificationsByCategory[NotificationCategory.low]!.length;
+
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: const Text('Custom'),
+        centerTitle: false,
+        actions: [
+          IconButton(
+            tooltip: 'Profile',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
+            },
+            icon: const CircleAvatar(
+              radius: 14,
+              child: Icon(Icons.person, size: 16),
+            ),
+          ),
+        ],
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
+      body: GestureDetector(
+        onVerticalDragEnd: (details) {
+          if ((details.primaryVelocity ?? 0) > 300) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const WellbeingScreen()),
+            );
+          }
+        },
+        onLongPress: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const CustomModeScreen()),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  _QuickFilterDot(icon: Icons.work_outline),
+                  SizedBox(width: 10),
+                  _QuickFilterDot(icon: Icons.favorite_outline),
+                  SizedBox(width: 10),
+                  _QuickFilterDot(icon: Icons.notifications_none),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Expanded(
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _PriorityCard(
+                            label: 'Emergency',
+                            count: emergencyCount,
+                            subtitle: 'Needs attention now',
+                            background: const Color(0xFFF8DFDF),
+                            foreground: const Color(0xFFBD3124),
+                            isLarge: true,
+                            onTap: () =>
+                                _openCategory(NotificationCategory.emergency),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _PriorityCard(
+                            label: 'High Priority',
+                            count: highCount,
+                            subtitle: 'Respond soon',
+                            background: const Color(0xFFF7ECCC),
+                            foreground: const Color(0xFFB56D00),
+                            isLarge: true,
+                            onTap: () => _openCategory(
+                              NotificationCategory.highPriority,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _PriorityCard(
+                            label: 'Medium',
+                            count: mediumCount,
+                            subtitle: 'Keep track',
+                            background: const Color(0xFFDCEEEE),
+                            foreground: const Color(0xFF1A6666),
+                            isLarge: false,
+                            onTap: () =>
+                                _openCategory(NotificationCategory.medium),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _PriorityCard(
+                            label: 'Low',
+                            count: lowCount,
+                            subtitle: 'No hurry',
+                            background: const Color(0xFFEDEDED),
+                            foreground: const Color(0xFF767676),
+                            isLarge: false,
+                            onTap: () =>
+                                _openCategory(NotificationCategory.low),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('AI assistant quick action')),
+          );
+        },
+        child: const Icon(Icons.auto_awesome),
+      ),
+      bottomNavigationBar: BottomAppBar(
+        shape: const CircularNotchedRectangle(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              Icon(Icons.dashboard_customize),
+              SizedBox(width: 48),
+              Icon(Icons.menu),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openCategory(NotificationCategory category) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => NotificationListScreen(
+          category: category,
+          notifications: _notificationsByCategory[category]!,
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickFilterDot extends StatelessWidget {
+  const _QuickFilterDot({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return CircleAvatar(
+      radius: 16,
+      backgroundColor: Colors.white,
+      child: Icon(icon, size: 16, color: const Color(0xFF2C2C2C)),
+    );
+  }
+}
+
+class _PriorityCard extends StatelessWidget {
+  const _PriorityCard({
+    required this.label,
+    required this.count,
+    required this.subtitle,
+    required this.background,
+    required this.foreground,
+    required this.isLarge,
+    required this.onTap,
+  });
+
+  final String label;
+  final int count;
+  final String subtitle;
+  final Color background;
+  final Color foreground;
+  final bool isLarge;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Ink(
+        padding: EdgeInsets.all(isLarge ? 18 : 14),
+        height: isLarge ? 170 : 120,
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(18),
+        ),
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('You have pushed the button this many times:'),
             Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+              label,
+              style: TextStyle(
+                color: foreground,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '$count',
+              style: TextStyle(
+                color: foreground,
+                fontSize: isLarge ? 40 : 32,
+                fontWeight: FontWeight.bold,
+                height: 1,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              subtitle,
+              style: TextStyle(
+                color: foreground.withValues(alpha: 0.8),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
+    );
+  }
+}
+
+class NotificationListScreen extends StatelessWidget {
+  const NotificationListScreen({
+    super.key,
+    required this.category,
+    required this.notifications,
+  });
+
+  final NotificationCategory category;
+  final List<AppNotification> notifications;
+
+  String get _title {
+    switch (category) {
+      case NotificationCategory.emergency:
+        return 'Emergency Notifications';
+      case NotificationCategory.highPriority:
+        return 'High Priority Notifications';
+      case NotificationCategory.medium:
+        return 'Medium Notifications';
+      case NotificationCategory.low:
+        return 'Low Notifications';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(_title)),
+      body: notifications.isEmpty
+          ? const Center(child: Text('No notifications in this category'))
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: notifications.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final item = notifications[index];
+                return Card(
+                  child: ListTile(
+                    title: Text(item.title),
+                    subtitle: Text(
+                      '${item.source} • score ${item.urgencyScore + item.userRuleBoost}',
+                    ),
+                    trailing: Text(
+                      '${item.createdAt.hour.toString().padLeft(2, '0')}:${item.createdAt.minute.toString().padLeft(2, '0')}',
+                    ),
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
+
+class WellbeingScreen extends StatelessWidget {
+  const WellbeingScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Analytics / Digital Wellbeing')),
+      body: const Center(child: Text('Screen 2 placeholder')),
+    );
+  }
+}
+
+class ProfileScreen extends StatelessWidget {
+  const ProfileScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Profile')),
+      body: const Center(child: Text('Screen 3 placeholder')),
+    );
+  }
+}
+
+class CustomModeScreen extends StatelessWidget {
+  const CustomModeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Custom Mode')),
+      body: const Center(child: Text('Screen 4 placeholder')),
     );
   }
 }
