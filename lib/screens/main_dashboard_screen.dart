@@ -7,7 +7,6 @@ import '../core/websocket_service.dart';
 import '../models/app_notification.dart';
 import '../widgets/ai_orb_fab.dart';
 import '../widgets/priority_card.dart';
-import '../widgets/quick_filter_dot.dart';
 import '../widgets/today_notification_card.dart';
 import '../widgets/wellbeing_section.dart';
 import 'cortex_screen.dart';
@@ -232,16 +231,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
-                    children: [
-                      QuickFilterDot(icon: Icons.work_outline),
-                      SizedBox(width: 10),
-                      QuickFilterDot(icon: Icons.favorite_outline),
-                      SizedBox(width: 10),
-                      QuickFilterDot(icon: Icons.notifications_none),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
                   TodayNotificationCard(
                     needingAttention: needingAttention,
                     focusPercent: focusPercent,
