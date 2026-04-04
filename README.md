@@ -77,6 +77,7 @@ Popup presets are centralized and easy to switch:
 2. Set popupPreset to one of:
 
 - projectCore
+- batNoir
 - densePro
 - cleanGlass
 - neonGamer
@@ -88,6 +89,8 @@ Preset token definitions are in:
 Theme contract and Flutter-to-QuickShell mapping:
 
 - docs/linux-quickshell-theme-contract.md
+
+Selected dashboard preset is persisted automatically and restored on next launch.
 
 ## Priority Routing Rules (Current UI)
 
