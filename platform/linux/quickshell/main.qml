@@ -3,6 +3,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
 import "components"
+import "components/PopupTheme.js" as PopupTheme
 
 ApplicationWindow {
     id: root
@@ -10,10 +11,12 @@ ApplicationWindow {
     width: popupOnlyMode ? 420 : 1280
     height: popupOnlyMode ? 220 : 760
     title: popupOnlyMode ? "SNP Popup Preview" : "SNP QuickShell"
-    color: popupOnlyMode ? "#00000000" : "#0b1118"
+    color: popupOnlyMode
+        ? "#00000000"
+        : (popupPreset === "batNoir" ? "#0D111A" : "#F2F2F2")
 
-    // Presets: densePro, cleanGlass, neonGamer
-    property string popupPreset: "densePro"
+    // Presets: projectCore, densePro, cleanGlass, neonGamer
+    property string popupPreset: "projectCore"
     property int popupDurationMs: 5000
     property bool popupOnlyMode: isPopupOnlyMode()
     property bool demoMode: isDemoMode()
@@ -21,6 +24,16 @@ ApplicationWindow {
     property var notificationHistory: []
     property var popupQueue: []
     property var activePopup: null
+
+    property int emergencyCount: countHistoryPriority("EMERGENCY")
+    property int highCount: countHistoryPriority("HIGH")
+    property int mediumCount: countHistoryPriority("MEDIUM")
+    property int lowCount: countHistoryPriority("LOW")
+    property int totalCount: emergencyCount + highCount + mediumCount + lowCount
+    property int needingAttention: emergencyCount + highCount
+    property real focusPercent: totalCount === 0
+        ? 0.0
+        : Math.min(1.0, (emergencyCount * 1.0 + highCount * 0.75 + mediumCount * 0.45) / totalCount)
 
     flags: popupOnlyMode
         ? (Qt.ToolTip | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.BypassWindowManagerHint)
@@ -115,8 +128,14 @@ ApplicationWindow {
         visible: !root.popupOnlyMode
         anchors.fill: parent
         gradient: Gradient {
-            GradientStop { position: 0.0; color: "#101a25" }
-            GradientStop { position: 1.0; color: "#0b1118" }
+            GradientStop {
+                position: 0.0
+                color: root.popupPreset === "batNoir" ? "#101520" : "#F4F4F5"
+            }
+            GradientStop {
+                position: 1.0
+                color: root.popupPreset === "batNoir" ? "#0B111C" : "#ECEDEF"
+            }
         }
     }
 
@@ -128,19 +147,32 @@ ApplicationWindow {
         anchors.left: parent.left
         notifications: root.notificationHistory
         expanded: true
+        stylePreset: root.popupPreset
+        hostWidth: root.width
     }
 
-    WellbeingOverlay {
-        id: wellbeing
+    DashboardOverview {
+        id: dashboardOverview
         visible: !root.popupOnlyMode
         anchors.left: centerPanel.right
         anchors.leftMargin: 16
+        anchors.top: parent.top
+        anchors.topMargin: 12
+        anchors.right: parent.right
+        anchors.rightMargin: 16
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 16
-        emergencyCount: countHistoryPriority("EMERGENCY")
-        highCount: countHistoryPriority("HIGH")
-        mediumCount: countHistoryPriority("MEDIUM")
-        lowCount: countHistoryPriority("LOW")
+        anchors.bottomMargin: 12
+        stylePreset: root.popupPreset
+        emergencyCount: root.emergencyCount
+        highCount: root.highCount
+        mediumCount: root.mediumCount
+        lowCount: root.lowCount
+        totalCount: root.totalCount
+        needingAttention: root.needingAttention
+        focusPercent: root.focusPercent
+        onPresetSelected: (preset) => {
+            root.popupPreset = preset
+        }
     }
 
     NotificationPopup {

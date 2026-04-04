@@ -49,6 +49,12 @@ Production mode (no demo seed, full app behavior for live backend wiring):
 ./scripts/run_quickshell_live.sh
 ```
 
+Dashboard demo mode (demo data with full QuickShell dashboard view):
+
+```bash
+./scripts/run_quickshell_dashboard_demo.sh
+```
+
 If Qt modules are missing:
 
 - Fedora:
@@ -70,6 +76,7 @@ Popup presets are centralized and easy to switch:
 1. Open platform/linux/quickshell/main.qml
 2. Set popupPreset to one of:
 
+- projectCore
 - densePro
 - cleanGlass
 - neonGamer
@@ -77,6 +84,10 @@ Popup presets are centralized and easy to switch:
 Preset token definitions are in:
 
 - platform/linux/quickshell/components/PopupTheme.js
+
+Theme contract and Flutter-to-QuickShell mapping:
+
+- docs/linux-quickshell-theme-contract.md
 
 ## Priority Routing Rules (Current UI)
 

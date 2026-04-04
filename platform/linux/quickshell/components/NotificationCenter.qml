@@ -2,16 +2,19 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "./"
+import "PopupTheme.js" as PopupTheme
 
 Rectangle {
     id: notificationCenter
 
     property var notifications: []
     property bool expanded: true
+    property string stylePreset: "projectCore"
+    property real hostWidth: parent ? parent.width : 1280
 
-    width: expanded ? 360 : 0
-    color: "#111922"
-    border.color: "#2e3a4a"
+    width: expanded ? Math.max(300, Math.min(420, hostWidth * 0.28)) : 0
+    color: PopupTheme.panelBackground(stylePreset)
+    border.color: PopupTheme.panelBorder(stylePreset)
     border.width: 1
 
     Behavior on width {
@@ -27,7 +30,7 @@ Rectangle {
             text: "NotificationCenter"
             font.pixelSize: 18
             font.bold: true
-            color: "#ffffff"
+            color: PopupTheme.titleColor(stylePreset)
         }
 
         ListView {
@@ -43,8 +46,9 @@ Rectangle {
                 width: ListView.view.width
                 height: 78
                 radius: 10
-                color: "#182430"
-                border.color: "#304357"
+                color: PopupTheme.cardSurfaceBackground(notificationCenter.stylePreset, modelData.priority)
+                border.color: PopupTheme.cardSurfaceBorder(notificationCenter.stylePreset, modelData.priority)
+                border.width: 1
 
                 Column {
                     anchors.fill: parent
@@ -56,19 +60,20 @@ Rectangle {
 
                         Text {
                             text: modelData.sender
-                            color: "#ffffff"
+                            color: PopupTheme.titleColor(notificationCenter.stylePreset)
                             font.pixelSize: 13
                             font.bold: true
                         }
 
                         PriorityBadge {
                             priority: modelData.priority
+                            stylePreset: notificationCenter.stylePreset
                         }
                     }
 
                     Text {
                         text: modelData.preview
-                        color: "#cad8ea"
+                        color: PopupTheme.bodyColor(notificationCenter.stylePreset)
                         font.pixelSize: 12
                         elide: Text.ElideRight
                         width: parent.width
