@@ -7,10 +7,10 @@ import '../models/app_notification.dart';
 import '../widgets/priority_card.dart';
 import '../widgets/quick_filter_dot.dart';
 import '../widgets/today_notification_card.dart';
+import '../widgets/wellbeing_section.dart';
 import 'custom_mode_screen.dart';
 import 'notification_list_screen.dart';
 import 'profile_screen.dart';
-import 'wellbeing_screen.dart';
 
 class MainDashboardScreen extends StatefulWidget {
   const MainDashboardScreen({super.key});
@@ -147,22 +147,15 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
         ],
       ),
       body: GestureDetector(
-        onVerticalDragEnd: (details) {
-          if ((details.primaryVelocity ?? 0) > 300) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const WellbeingScreen()),
-            );
-          }
-        },
+        behavior: HitTestBehavior.translucent,
         onLongPress: () {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const CustomModeScreen()),
           );
         },
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 110),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -182,87 +175,85 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                 isDark: isDark,
               ),
               const SizedBox(height: 12),
-              Expanded(
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: PriorityCard(
-                            label: 'Emergency',
-                            count: emergencyCount,
-                            subtitle: 'Needs attention now',
-                            background: isDark
-                                ? const Color(0xFF462A2A)
-                                : const Color(0xFFF8DFDF),
-                            foreground: isDark
-                                ? const Color(0xFFFF8E86)
-                                : const Color(0xFFBD3124),
-                            isLarge: true,
-                            onTap: () =>
-                                _openCategory(NotificationCategory.emergency),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: PriorityCard(
-                            label: 'High Priority',
-                            count: highCount,
-                            subtitle: 'Respond soon',
-                            background: isDark
-                                ? const Color(0xFF4A3D21)
-                                : const Color(0xFFF7ECCC),
-                            foreground: isDark
-                                ? const Color(0xFFFFC45A)
-                                : const Color(0xFFB56D00),
-                            isLarge: true,
-                            onTap: () => _openCategory(
-                              NotificationCategory.highPriority,
-                            ),
-                          ),
-                        ),
-                      ],
+              Row(
+                children: [
+                  Expanded(
+                    child: PriorityCard(
+                      label: 'Emergency',
+                      count: emergencyCount,
+                      subtitle: 'Needs attention now',
+                      background: isDark
+                          ? const Color(0xFF462A2A)
+                          : const Color(0xFFF8DFDF),
+                      foreground: isDark
+                          ? const Color(0xFFFF8E86)
+                          : const Color(0xFFBD3124),
+                      isLarge: true,
+                      onTap: () =>
+                          _openCategory(NotificationCategory.emergency),
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: PriorityCard(
-                            label: 'Medium',
-                            count: mediumCount,
-                            subtitle: 'Keep track',
-                            background: isDark
-                                ? const Color(0xFF203A3A)
-                                : const Color(0xFFDCEEEE),
-                            foreground: isDark
-                                ? const Color(0xFF74D7D7)
-                                : const Color(0xFF1A6666),
-                            isLarge: false,
-                            onTap: () =>
-                                _openCategory(NotificationCategory.medium),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: PriorityCard(
-                            label: 'Low',
-                            count: lowCount,
-                            subtitle: 'No hurry',
-                            background: isDark
-                                ? const Color(0xFF2D3033)
-                                : const Color(0xFFEDEDED),
-                            foreground: isDark
-                                ? const Color(0xFFBCC2C7)
-                                : const Color(0xFF767676),
-                            isLarge: false,
-                            onTap: () =>
-                                _openCategory(NotificationCategory.low),
-                          ),
-                        ),
-                      ],
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: PriorityCard(
+                      label: 'High Priority',
+                      count: highCount,
+                      subtitle: 'Respond soon',
+                      background: isDark
+                          ? const Color(0xFF4A3D21)
+                          : const Color(0xFFF7ECCC),
+                      foreground: isDark
+                          ? const Color(0xFFFFC45A)
+                          : const Color(0xFFB56D00),
+                      isLarge: true,
+                      onTap: () =>
+                          _openCategory(NotificationCategory.highPriority),
                     ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: PriorityCard(
+                      label: 'Medium',
+                      count: mediumCount,
+                      subtitle: 'Keep track',
+                      background: isDark
+                          ? const Color(0xFF203A3A)
+                          : const Color(0xFFDCEEEE),
+                      foreground: isDark
+                          ? const Color(0xFF74D7D7)
+                          : const Color(0xFF1A6666),
+                      isLarge: false,
+                      onTap: () => _openCategory(NotificationCategory.medium),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: PriorityCard(
+                      label: 'Low',
+                      count: lowCount,
+                      subtitle: 'No hurry',
+                      background: isDark
+                          ? const Color(0xFF2D3033)
+                          : const Color(0xFFEDEDED),
+                      foreground: isDark
+                          ? const Color(0xFFBCC2C7)
+                          : const Color(0xFF767676),
+                      isLarge: false,
+                      onTap: () => _openCategory(NotificationCategory.low),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              WellbeingSection(
+                total: total,
+                urgent: emergencyCount,
+                weeklyDeltaPercent: -23,
+                isDark: isDark,
               ),
             ],
           ),
