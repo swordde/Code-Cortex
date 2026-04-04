@@ -300,7 +300,7 @@ class _CortexScreenState extends State<CortexScreen> {
     });
     try {
       await _apiClient.updateCortexConfig(next);
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() {
         _autoReplyEnabled = prevAutoReply;
@@ -309,7 +309,7 @@ class _CortexScreenState extends State<CortexScreen> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to update auto-reply.')),
+        SnackBar(content: Text(_friendlyError(error, 'Failed to update auto-reply.'))),
       );
     }
   }
@@ -397,7 +397,7 @@ class _CortexScreenState extends State<CortexScreen> {
                 } catch (error) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(this.context).showSnackBar(
-                    SnackBar(content: Text('Failed to add reply template: $error')),
+                    SnackBar(content: Text(_friendlyError(error, 'Failed to add reply template.'))),
                   );
                 }
               },
@@ -492,7 +492,7 @@ class _CortexScreenState extends State<CortexScreen> {
                     } catch (error) {
                       if (!mounted) return;
                       ScaffoldMessenger.of(this.context).showSnackBar(
-                        SnackBar(content: Text('Failed to schedule message: $error')),
+                        SnackBar(content: Text(_friendlyError(error, 'Failed to schedule message.'))),
                       );
                     }
                   },
@@ -506,5 +506,14 @@ class _CortexScreenState extends State<CortexScreen> {
     );
 
     bodyController.dispose();
+  }
+
+  String _friendlyError(Object error, String fallback) {
+    final text = error.toString();
+    final lowered = text.toLowerCase();
+    if (lowered.contains('connection refused') || lowered.contains('socketexception')) {
+      return '$fallback Backend not reachable on localhost:8080. Start backend first.';
+    }
+    return '$fallback $text';
   }
 }
