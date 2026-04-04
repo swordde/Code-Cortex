@@ -45,7 +45,7 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
     _loadData();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadData({String? preferredModeDisplay}) async {
     try {
       final modes = await _apiClient.fetchModes();
       final rules = await _apiClient.fetchRules();
@@ -109,10 +109,15 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
         _prioritizedAppsByMode[display] = appNames;
       }
 
-      _selectedMode = _toDisplayModeName(
+      final fallbackSelected = _toDisplayModeName(
         modes.where((m) => m.isActive).cast<BackendMode?>().firstWhere((m) => m != null, orElse: () => null)?.name ??
             (modes.isNotEmpty ? modes.first.name : 'default'),
       );
+      if (preferredModeDisplay != null && _backendModesByDisplay.containsKey(preferredModeDisplay)) {
+        _selectedMode = preferredModeDisplay;
+      } else {
+        _selectedMode = fallbackSelected;
+      }
       if (_selectedMode.isEmpty && _modes.isNotEmpty) {
         _selectedMode = _modes.first;
       }
@@ -447,6 +452,7 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
     if (mode == null) return;
     try {
       await _apiClient.activateMode(mode.id);
+      await _loadData(preferredModeDisplay: modeDisplay);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -477,6 +483,7 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
     try {
       final response = await _apiClient.updateMode(updated);
       _backendModesByDisplay[_selectedMode] = response;
+      await _loadData(preferredModeDisplay: _selectedMode);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -486,6 +493,7 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
   }
 
   Future<void> _removeContact(PriorityContact contact) async {
+    final preferred = _selectedMode;
     setState(() {
       _contactsByMode[_selectedMode]?.remove(contact);
     });
@@ -497,9 +505,11 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
     }
 
     await _syncSelectedMode();
+    await _loadData(preferredModeDisplay: preferred);
   }
 
   Future<void> _removeKeyword(KeywordRule keyword) async {
+    final preferred = _selectedMode;
     setState(() {
       _keywordsByMode[_selectedMode]?.remove(keyword);
     });
@@ -511,6 +521,7 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
     }
 
     await _syncSelectedMode();
+    await _loadData(preferredModeDisplay: preferred);
   }
 
   String _toDisplayModeName(String backendName) {
@@ -600,6 +611,7 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                     _prioritizedAppsByMode[display] = <String>{};
                     _selectedMode = display;
                   });
+                  await _loadData(preferredModeDisplay: display);
                 } catch (error) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(this.context).showSnackBar(
@@ -688,6 +700,7 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                         );
                       });
                       await _syncSelectedMode();
+                      await _loadData(preferredModeDisplay: _selectedMode);
                     } catch (error) {
                       if (!mounted) return;
                       ScaffoldMessenger.of(this.context).showSnackBar(
@@ -778,6 +791,7 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                         );
                       });
                       await _syncSelectedMode();
+                      await _loadData(preferredModeDisplay: _selectedMode);
                     } catch (error) {
                       if (!mounted) return;
                       ScaffoldMessenger.of(this.context).showSnackBar(

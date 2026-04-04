@@ -28,19 +28,7 @@ class _CortexScreenState extends State<CortexScreen> {
 
   Future<void> _loadData() async {
     try {
-      final cfg = await _apiClient.fetchCortexConfig();
-      final replies = await _apiClient.fetchReplyTemplates();
-      final scheduled = await _apiClient.fetchScheduledMessages();
-      final activity = await _apiClient.fetchCortexActivity();
-
-      if (!mounted) return;
-      setState(() {
-        _cortexEnabled = cfg.enabled;
-        _autoReplyEnabled = cfg.autoReply;
-        _savedReplies = replies;
-        _scheduledMessages = scheduled;
-        _activity = activity;
-      });
+      await _refreshData();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -300,6 +288,7 @@ class _CortexScreenState extends State<CortexScreen> {
     });
     try {
       await _apiClient.updateCortexConfig(next);
+      await _refreshData();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -317,10 +306,7 @@ class _CortexScreenState extends State<CortexScreen> {
   Future<void> _deleteReply(BackendReplyTemplate reply) async {
     try {
       await _apiClient.deleteReplyTemplate(reply.id);
-      if (!mounted) return;
-      setState(() {
-        _savedReplies.removeWhere((r) => r.id == reply.id);
-      });
+      await _refreshData();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -332,10 +318,7 @@ class _CortexScreenState extends State<CortexScreen> {
   Future<void> _approveScheduled(BackendScheduledMessage message) async {
     try {
       await _apiClient.approveScheduledMessage(message.id);
-      if (!mounted) return;
-      setState(() {
-        _scheduledMessages.removeWhere((m) => m.id == message.id);
-      });
+      await _refreshData();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -347,10 +330,7 @@ class _CortexScreenState extends State<CortexScreen> {
   Future<void> _cancelScheduled(BackendScheduledMessage message) async {
     try {
       await _apiClient.cancelScheduledMessage(message.id);
-      if (!mounted) return;
-      setState(() {
-        _scheduledMessages.removeWhere((m) => m.id == message.id);
-      });
+      await _refreshData();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -389,11 +369,8 @@ class _CortexScreenState extends State<CortexScreen> {
                 if (text.isEmpty) return;
                 Navigator.pop(context);
                 try {
-                  final created = await _apiClient.createReplyTemplate(body: text);
-                  if (!mounted) return;
-                  setState(() {
-                    _savedReplies.add(created);
-                  });
+                  await _apiClient.createReplyTemplate(body: text);
+                  await _refreshData();
                 } catch (error) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(this.context).showSnackBar(
@@ -475,19 +452,11 @@ class _CortexScreenState extends State<CortexScreen> {
                     final draft = bodyController.text.trim();
                     if (draft.isEmpty) return;
                     try {
-                      final created = await _apiClient.createScheduledMessage(
+                      await _apiClient.createScheduledMessage(
                         draftBody: draft,
                         scheduledAt: selectedDateTime,
                       );
-                      if (!mounted) return;
-                      setState(() {
-                        _scheduledMessages.add(created);
-                        _scheduledMessages.sort((a, b) {
-                          final at = a.scheduledAt ?? DateTime.now();
-                          final bt = b.scheduledAt ?? DateTime.now();
-                          return at.compareTo(bt);
-                        });
-                      });
+                      await _refreshData();
                       if (dialogContext.mounted) Navigator.pop(dialogContext);
                     } catch (error) {
                       if (!mounted) return;
@@ -515,5 +484,21 @@ class _CortexScreenState extends State<CortexScreen> {
       return '$fallback Backend not reachable on localhost:8080. Start backend first.';
     }
     return '$fallback $text';
+  }
+
+  Future<void> _refreshData() async {
+    final cfg = await _apiClient.fetchCortexConfig();
+    final replies = await _apiClient.fetchReplyTemplates();
+    final scheduled = await _apiClient.fetchScheduledMessages();
+    final activity = await _apiClient.fetchCortexActivity();
+
+    if (!mounted) return;
+    setState(() {
+      _cortexEnabled = cfg.enabled;
+      _autoReplyEnabled = cfg.autoReply;
+      _savedReplies = replies;
+      _scheduledMessages = scheduled;
+      _activity = activity;
+    });
   }
 }
