@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:audioplayers/audioplayers.dart';
+// import 'package:audioplayers/audioplayers.dart'; // Temporarily disabled
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
@@ -19,7 +19,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isPlayingVoice = false;
   final UserProfileStore _store = UserProfileStore.instance;
   final VoiceRecorderService _recorderService = VoiceRecorderService();
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  // final AudioPlayer _audioPlayer = AudioPlayer(); // Temporarily disabled
   final ApiClient _apiClient = ApiClient();
   Timer? _recordTimer;
   BackendUserProfile? _profile;
@@ -34,7 +34,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void dispose() {
     _recordTimer?.cancel();
-    unawaited(_audioPlayer.dispose());
+    // unawaited(_audioPlayer.dispose()); // Temporarily disabled
     unawaited(_recorderService.dispose());
     super.dispose();
   }
@@ -379,28 +379,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _togglePlayback(VoiceSample? voice) async {
     if (voice == null || voice.filePath == null) return;
-
-    if (_isPlayingVoice) {
-      await _audioPlayer.pause();
-      if (!mounted) return;
-      setState(() {
-        _isPlayingVoice = false;
-      });
-      return;
-    }
-
-    await _audioPlayer.play(DeviceFileSource(voice.filePath!));
+    // Audio playback temporarily disabled until audioplayers system packages are installed
     if (!mounted) return;
-    setState(() {
-      _isPlayingVoice = true;
-    });
-
-    _audioPlayer.onPlayerComplete.listen((_) {
-      if (!mounted) return;
-      setState(() {
-        _isPlayingVoice = false;
-      });
-    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Voice playback coming soon')),
+    );
   }
 
   Future<void> _loadBackendState() async {
