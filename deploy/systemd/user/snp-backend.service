@@ -1,0 +1,19 @@
+[Unit]
+Description=SNP Go Backend (User Service)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.local/share/snp
+Environment=SNP_LOG_LEVEL=info
+Environment=SNP_ENV=prod
+ExecStart=%h/.local/share/snp/bin/snp-backend
+Restart=on-failure
+RestartSec=2
+TimeoutStartSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

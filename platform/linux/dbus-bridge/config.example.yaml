@@ -1,0 +1,17 @@
+server:
+  ingest_url: "http://127.0.0.1:8080/v1/ingest/linux"
+  request_timeout_ms: 2000
+  max_retries: 5
+  backoff_initial_ms: 250
+  backoff_max_ms: 4000
+
+logging:
+  level: "info"
+  redact_content: true
+
+runtime:
+  xdg_runtime_dir_socket: "${XDG_RUNTIME_DIR}/snp/dbus-bridge.sock"
+  dedupe_window_ms: 1500
+
+schema:
+  version: "1.0"

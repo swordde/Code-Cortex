@@ -1,0 +1,19 @@
+[Unit]
+Description=SNP D-Bus Notification Bridge (User Service)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.local/share/snp
+Environment=SNP_ENV=prod
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=%t/bus
+ExecStart=%h/.local/share/snp/bin/snp-dbus-bridge --config %h/.local/share/snp/config/dbus-bridge.yaml
+Restart=on-failure
+RestartSec=2
+TimeoutStartSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=SNP Python AI Service (User Service)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.local/share/snp
+Environment=SNP_ENV=prod
+ExecStart=%h/.local/share/snp/venv/bin/python %h/.local/share/snp/ai/main.py
+Restart=on-failure
+RestartSec=2
+TimeoutStartSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target
