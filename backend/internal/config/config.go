@@ -5,27 +5,23 @@ import (
 )
 
 type Config struct {
-	ListenAddr          string
-	SQLitePath          string
-	FlutterDispatchURL  string
-	QuickShellSocket    string
-	AIEndpoint          string
-	ClassificationTries int
-	ActivationSecret    string
+	Port           string
+	MongoURI       string
+	MongoDBName    string
+	AIServiceURL   string
+	UnixSocketPath string
+	AvatarDir      string
 }
 
-func FromEnv() Config {
-	cfg := Config{
-		ListenAddr:          envOrDefault("CORTEX_LISTEN_ADDR", "127.0.0.1:8088"),
-		SQLitePath:          envOrDefault("CORTEX_SQLITE_PATH", "./cortex_backend.db"),
-		FlutterDispatchURL:  os.Getenv("CORTEX_FLUTTER_DISPATCH_URL"),
-		QuickShellSocket:    envOrDefault("CORTEX_QUICKSHELL_SOCKET", "/tmp/cortex_quickshell.sock"),
-		AIEndpoint:          os.Getenv("CORTEX_AI_ENDPOINT"),
-		ClassificationTries: 3,
-		ActivationSecret:    envOrDefault("CORTEX_ACTIVATION_SECRET", "change-me-in-prod"),
+func Load() Config {
+	return Config{
+		Port:           envOrDefault("SNP_PORT", ":8080"),
+		MongoURI:       envOrDefault("SNP_MONGO_URI", "mongodb://localhost:27017"),
+		MongoDBName:    envOrDefault("SNP_MONGO_DB", "snp"),
+		AIServiceURL:   envOrDefault("SNP_AI_URL", "http://localhost:5000"),
+		UnixSocketPath: envOrDefault("SNP_SOCKET_PATH", "/tmp/snp.sock"),
+		AvatarDir:      envOrDefault("SNP_AVATAR_DIR", "./avatars"),
 	}
-
-	return cfg
 }
 
 func envOrDefault(key, fallback string) string {
