@@ -9,6 +9,7 @@ import '../widgets/priority_card.dart';
 import '../widgets/quick_filter_dot.dart';
 import '../widgets/today_notification_card.dart';
 import '../widgets/wellbeing_section.dart';
+import 'cortex_screen.dart';
 import 'custom_mode_screen.dart';
 import 'notification_list_screen.dart';
 import 'profile_screen.dart';
@@ -139,6 +140,16 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
         centerTitle: false,
         backgroundColor: Colors.transparent,
         actions: [
+          IconButton(
+            tooltip: 'Cortex Mode',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CortexScreen()),
+              );
+            },
+            icon: const Icon(Icons.psychology_outlined),
+          ),
           IconButton(
             tooltip: 'Profile',
             onPressed: () {
