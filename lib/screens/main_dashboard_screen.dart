@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../models/app_notification.dart';
+import '../widgets/ai_orb_fab.dart';
 import '../widgets/priority_card.dart';
 import '../widgets/quick_filter_dot.dart';
 import '../widgets/today_notification_card.dart';
@@ -260,16 +261,12 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
+      floatingActionButton: AiOrbFab(
+        onTap: () {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('AI assistant quick action')),
           );
         },
-        backgroundColor: isDark
-            ? const Color(0xFF3CB7AE)
-            : const Color(0xFF7BD8D1),
-        child: const Icon(Icons.auto_awesome),
       ),
       bottomNavigationBar: SizedBox(height: isDark ? 20 : 14),
     );
