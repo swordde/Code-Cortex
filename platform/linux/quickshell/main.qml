@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
+import QtCore
 import "components"
 import "components/PopupTheme.js" as PopupTheme
 
@@ -15,8 +16,9 @@ ApplicationWindow {
         ? "#00000000"
         : (popupPreset === "batNoir" ? "#0D111A" : "#F2F2F2")
 
-    // Presets: projectCore, densePro, cleanGlass, neonGamer
+    // Presets: projectCore, batNoir, densePro, cleanGlass, neonGamer
     property string popupPreset: "projectCore"
+    readonly property var availablePresets: ["projectCore", "batNoir", "densePro", "cleanGlass", "neonGamer"]
     property int popupDurationMs: 5000
     property bool popupOnlyMode: isPopupOnlyMode()
     property bool demoMode: isDemoMode()
@@ -39,6 +41,18 @@ ApplicationWindow {
         ? (Qt.ToolTip | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.BypassWindowManagerHint)
         : Qt.Window
 
+    Settings {
+        id: userSettings
+        category: "dashboard"
+        property string savedPreset: "projectCore"
+    }
+
+    onPopupPresetChanged: {
+        if (isSupportedPreset(popupPreset)) {
+            userSettings.savedPreset = popupPreset
+        }
+    }
+
     function isDemoMode() {
         var args = Qt.application.arguments
         for (var i = 0; i < args.length; i++) {
@@ -53,6 +67,15 @@ ApplicationWindow {
         var args = Qt.application.arguments
         for (var i = 0; i < args.length; i++) {
             if (args[i] === "--popup-only") {
+                return true
+            }
+        }
+        return false
+    }
+
+    function isSupportedPreset(presetName) {
+        for (var i = 0; i < availablePresets.length; i++) {
+            if (availablePresets[i] === presetName) {
                 return true
             }
         }
@@ -94,6 +117,10 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
+        if (isSupportedPreset(userSettings.savedPreset)) {
+            popupPreset = userSettings.savedPreset
+        }
+
         if (popupOnlyMode) {
             if (activePopup && activePopup.priority === "EMERGENCY") {
                 x = (Screen.width - width) / 2
