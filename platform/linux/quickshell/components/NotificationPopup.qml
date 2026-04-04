@@ -18,7 +18,7 @@ Rectangle {
     width: 360
     height: contentColumn.implicitHeight + 20
     radius: PopupTheme.popupRadius(stylePreset)
-    color: PopupTheme.popupBackground(stylePreset)
+    color: PopupTheme.popupBackground(stylePreset, priority)
     border.color: PopupTheme.popupBorder(stylePreset, priority)
     border.width: 1
 
