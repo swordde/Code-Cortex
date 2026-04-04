@@ -11,6 +11,27 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
   String _selectedMode = 'College';
   final List<String> _modes = ['College', 'Office', 'Home'];
 
+  final List<PrioritizableApp> _availableApps = const [
+    PrioritizableApp(name: 'WhatsApp', icon: Icons.chat_bubble_outline),
+    PrioritizableApp(name: 'Gmail', icon: Icons.mail_outline),
+    PrioritizableApp(name: 'Messages', icon: Icons.sms_outlined),
+    PrioritizableApp(name: 'Phone', icon: Icons.call_outlined),
+    PrioritizableApp(name: 'Instagram', icon: Icons.camera_alt_outlined),
+    PrioritizableApp(name: 'Slack', icon: Icons.work_outline),
+    PrioritizableApp(name: 'Teams', icon: Icons.groups_outlined),
+    PrioritizableApp(name: 'Calendar', icon: Icons.calendar_month_outlined),
+    PrioritizableApp(name: 'Drive', icon: Icons.cloud_outlined),
+    PrioritizableApp(name: 'Banking', icon: Icons.account_balance_outlined),
+    PrioritizableApp(name: 'Telegram', icon: Icons.send_outlined),
+    PrioritizableApp(name: 'Discord', icon: Icons.forum_outlined),
+  ];
+
+  final Map<String, Set<String>> _prioritizedAppsByMode = {
+    'College': {'WhatsApp', 'Messages'},
+    'Office': {'Gmail', 'Slack', 'Teams'},
+    'Home': {'Phone'},
+  };
+
   final Map<String, List<PriorityContact>> _contactsByMode = {
     'College': [
       PriorityContact(name: 'Mom', priority: 'Emergency'),
@@ -60,6 +81,7 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
 
     final contacts = _contactsByMode[_selectedMode] ?? [];
     final keywords = _keywordsByMode[_selectedMode] ?? [];
+    final prioritizedApps = _prioritizedAppsByMode[_selectedMode] ?? <String>{};
 
     return Scaffold(
       appBar: AppBar(
@@ -402,6 +424,112 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
             ),
             const SizedBox(height: 28),
 
+            // Prioritize Apps Section
+            Text(
+              'Prioritize Apps',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Tap apps to mark as prioritized for this mode.',
+              style: TextStyle(
+                color: subtleColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                ..._availableApps.map((app) {
+                  final isSelected = prioritizedApps.contains(app.name);
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        if (isSelected) {
+                          prioritizedApps.remove(app.name);
+                        } else {
+                          prioritizedApps.add(app.name);
+                        }
+                        _prioritizedAppsByMode[_selectedMode] = prioritizedApps;
+                      });
+                    },
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 102,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? accentColor.withValues(alpha: 0.15)
+                                : accentColor.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected
+                                  ? accentColor
+                                  : subtleColor.withValues(alpha: 0.2),
+                              width: isSelected ? 1.6 : 1,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Icon(
+                                app.icon,
+                                color: isSelected ? accentColor : subtleColor,
+                                size: 20,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                app.name,
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: isSelected ? accentColor : subtleColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (isSelected)
+                          Positioned(
+                            right: -6,
+                            top: -6,
+                            child: Container(
+                              width: 22,
+                              height: 22,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE4FFF7),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: accentColor.withValues(alpha: 0.8),
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.check,
+                                size: 14,
+                                color: accentColor,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+            const SizedBox(height: 28),
+
             // Rules Info
             Container(
               decoration: BoxDecoration(
@@ -484,6 +612,7 @@ class _CustomModeScreenState extends State<CustomModeScreen> {
                     _modes.add(controller.text);
                     _contactsByMode[controller.text] = [];
                     _keywordsByMode[controller.text] = [];
+                    _prioritizedAppsByMode[controller.text] = <String>{};
                   });
                   Navigator.pop(context);
                 }
@@ -661,4 +790,11 @@ class KeywordRule {
   final String priority;
 
   KeywordRule({required this.keyword, required this.priority});
+}
+
+class PrioritizableApp {
+  final String name;
+  final IconData icon;
+
+  const PrioritizableApp({required this.name, required this.icon});
 }
