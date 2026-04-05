@@ -1,0 +1,66 @@
+{
+  "notifications": [
+    {
+      "id": "171a5ce2-b68d-49fb-aee5-7307b17abffa",
+      "user_id": "u_test",
+      "content": "critical outage in payments",
+      "app_name": "Slack",
+      "app_package": "com.slack",
+      "sender_name": "",
+      "priority": "EMERGENCY",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0.416426,
+      "label_reason": "rule_override_service_outage",
+      "timestamp": "2026-04-05T03:17:12.426Z"
+    },
+    {
+      "id": "3e4feb00-458c-45a3-b154-08f1c8152e1d",
+      "user_id": "u_test",
+      "content": "newsletter this week",
+      "app_name": "Gmail",
+      "app_package": "com.gmail",
+      "sender_name": "",
+      "priority": "HIGH",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0.36818,
+      "label_reason": "content_platform_mode_context_signal_prediction",
+      "timestamp": "2026-04-05T03:17:12.598Z"
+    },
+    {
+      "id": "27c3bd39-1782-4188-b0b6-d5ad4f0bae0d",
+      "user_id": "u_test",
+      "content": "urgent: server down now",
+      "app_name": "WhatsApp",
+      "app_package": "com.whatsapp",
+      "sender_name": "",
+      "priority": "HIGH",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0.472292,
+      "label_reason": "content_platform_mode_context_signal_prediction",
+      "timestamp": "2026-04-05T03:17:12.074Z"
+    },
+    {
+      "id": "432bffb4-ad1a-4533-bac2-039333629362",
+      "user_id": "u_test",
+      "content": "low: ping me later",
+      "app_name": "WhatsApp",
+      "app_package": "com.whatsapp",
+      "sender_name": "",
+      "priority": "MEDIUM",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0.393946,
+      "label_reason": "content_platform_mode_context_signal_prediction",
+      "timestamp": "2026-04-05T03:17:12.258Z"
+    }
+  ],
+  "updated_at": "2026-04-05T03:17:12.774826788Z",
+  "user_id": "u_test"
+}

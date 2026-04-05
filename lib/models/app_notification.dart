@@ -7,6 +7,7 @@ class AppNotification {
     required this.title,
     required this.source,
     required this.appPackage,
+    required this.senderName,
     required this.priority,
     required this.confidence,
     required this.urgencyScore,
@@ -19,6 +20,7 @@ class AppNotification {
   final String title;
   final String source;
   final String appPackage;
+  final String senderName;
   final String priority;
   final double confidence;
   final int urgencyScore;
@@ -48,6 +50,7 @@ class AppNotification {
       title: (json['content'] as String?) ?? 'Notification',
       source: (json['app_name'] as String?) ?? 'Unknown',
       appPackage: (json['app_package'] as String?) ?? '',
+      senderName: (json['sender_name'] as String?) ?? '',
       priority: priority,
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
       urgencyScore: urgency,

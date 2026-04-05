@@ -39,6 +39,7 @@ dependencies:
   record: ^6.2.0
   # audioplayers: ^6.1.0  # Temporarily disabled - requires gstreamer system packages on Linux
   path_provider: ^2.1.4
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:

@@ -16,6 +16,66 @@
       "timestamp": "2026-04-05T02:24:57.327Z"
     },
     {
+      "id": "812ddc19-93f1-43b3-b3f3-f843f5ca7b72",
+      "user_id": "vdhdh",
+      "content": "..Varun AIML: 10 new messages",
+      "app_name": "WhatsApp",
+      "app_package": "com.whatsapp",
+      "sender_name": "..Varun AIML",
+      "priority": "MEDIUM",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0,
+      "label_reason": "fallback:non_2xx",
+      "timestamp": "2026-04-05T03:37:53.218Z"
+    },
+    {
+      "id": "96cc3d65-aaaa-47c0-9e62-cb3cdbbdd3a3",
+      "user_id": "vdhdh",
+      "content": "..Varun AIML: Buy this product",
+      "app_name": "WhatsApp",
+      "app_package": "com.whatsapp",
+      "sender_name": "..Varun AIML",
+      "priority": "MEDIUM",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0,
+      "label_reason": "fallback:non_2xx",
+      "timestamp": "2026-04-05T03:37:53.208Z"
+    },
+    {
+      "id": "01a5fb40-8da2-4eec-a7c0-a3c5f9fa12b8",
+      "user_id": "vdhdh",
+      "content": "..Varun AIML: 9 new messages",
+      "app_name": "WhatsApp",
+      "app_package": "com.whatsapp",
+      "sender_name": "..Varun AIML",
+      "priority": "MEDIUM",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0,
+      "label_reason": "fallback:non_2xx",
+      "timestamp": "2026-04-05T03:37:26.662Z"
+    },
+    {
+      "id": "0869311a-fc91-42ac-bd3b-20f66ffee445",
+      "user_id": "vdhdh",
+      "content": "..Varun AIML: 30 % discount in one pair of dress",
+      "app_name": "WhatsApp",
+      "app_package": "com.whatsapp",
+      "sender_name": "..Varun AIML",
+      "priority": "MEDIUM",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0,
+      "label_reason": "fallback:non_2xx",
+      "timestamp": "2026-04-05T03:37:26.639Z"
+    },
+    {
       "id": "2d64d135-9854-4445-8a20-b89df4cf76b5",
       "user_id": "vdhdh",
       "content": "..Varun AIML: 5 new messages",
@@ -91,6 +151,6 @@
       "timestamp": "2026-04-05T02:02:11.433Z"
     }
   ],
-  "updated_at": "2026-04-05T02:24:57.511334635Z",
+  "updated_at": "2026-04-05T03:37:53.376866913Z",
   "user_id": "vdhdh"
 }

@@ -115,6 +115,8 @@ func (s *WebhookReplySender) Send(ctx context.Context, n *models.Notification, r
 		"user_id":         n.UserID,
 		"app_name":        n.AppName,
 		"app_package":     n.AppPackage,
+		"sender_name":     n.SenderName,
+		"reply_to":        n.SenderName,
 		"priority":        n.Priority,
 		"mode":            n.Mode,
 		"confidence":      n.Confidence,

@@ -1,6 +1,36 @@
 {
   "notifications": [
     {
+      "id": "a0b4ac1a-b246-43d4-950e-a9ece23e6633",
+      "user_id": ".ithun",
+      "content": "Your phone is not charging at the maximum speed. Tap here to learn how to speed it up.\nCharging paused.",
+      "app_name": "System UI",
+      "app_package": "com.android.systemui",
+      "sender_name": "",
+      "priority": "HIGH",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0.416516,
+      "label_reason": "content_platform_mode_context_signal_prediction",
+      "timestamp": "2026-04-05T02:58:28.49Z"
+    },
+    {
+      "id": "fc791727-3554-4e3c-b984-6edfa9c3a9e8",
+      "user_id": ".ithun",
+      "content": "USB debugging connected: Tap to turn off USB debugging",
+      "app_name": "Android System",
+      "app_package": "android",
+      "sender_name": "USB debugging connected",
+      "priority": "HIGH",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0.379454,
+      "label_reason": "content_platform_mode_context_signal_prediction",
+      "timestamp": "2026-04-05T02:58:24.774Z"
+    },
+    {
       "id": "570ff075-e5bf-4cd6-95ad-80db7afeac57",
       "user_id": ".ithun",
       "content": "Not connected to any device",
@@ -151,6 +181,36 @@
       "timestamp": "2026-04-05T02:28:37.047Z"
     },
     {
+      "id": "186d5084-af92-43c4-b3b5-3ad2529c269f",
+      "user_id": ".ithun",
+      "content": "Charging this device via USB: Tap for more options",
+      "app_name": "Android System",
+      "app_package": "android",
+      "sender_name": "Charging this device via USB",
+      "priority": "MEDIUM",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0.417464,
+      "label_reason": "content_platform_mode_context_signal_prediction",
+      "timestamp": "2026-04-05T02:58:24.769Z"
+    },
+    {
+      "id": "97862d8c-a0c6-4c35-aeb3-0aa6db25f9db",
+      "user_id": ".ithun",
+      "content": "Assured up to ₹200 cashback on your first card payment: Earn after adding your credit card and using Tap \u0026 Pay",
+      "app_name": "GPay",
+      "app_package": "com.google.android.apps.nbu.paisa.user",
+      "sender_name": "Assured up to ₹200 cashback on your first card payment",
+      "priority": "MEDIUM",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0.373037,
+      "label_reason": "content_platform_mode_context_signal_prediction",
+      "timestamp": "2026-04-05T02:58:10.945Z"
+    },
+    {
       "id": "63d3427c-66d0-4122-8863-302b03d196f2",
       "user_id": ".ithun",
       "content": "Charging this device via USB: Tap for more options",
@@ -256,6 +316,6 @@
       "timestamp": "2026-04-05T02:28:42.729Z"
     }
   ],
-  "updated_at": "2026-04-05T02:52:16.498319182Z",
+  "updated_at": "2026-04-05T02:58:28.693712043Z",
   "user_id": ".ithun"
 }

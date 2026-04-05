@@ -82,13 +82,13 @@ class ApiClient {
     _ensureSuccess(response, 'Failed to ingest notification');
   }
 
-  Future<BackendGenerateReplyResult> generateAndSendNotificationReply({
+  Future<BackendGeneratedReply> generateNotificationReply({
     required String notificationId,
     String userId = 'default',
   }) async {
     final resolvedUserId = userId.trim().isEmpty ? 'default' : userId.trim();
     final response = await _post(
-      BackendEndpoints.notificationGenerateReplyUri(notificationId).replace(
+      BackendEndpoints.notificationGeneratePreviewReplyUri(notificationId).replace(
         queryParameters: {'user_id': resolvedUserId},
       ),
       headers: {'Content-Type': 'application/json'},
@@ -100,7 +100,29 @@ class ApiClient {
     if (decoded is! Map<String, dynamic>) {
       throw Exception('Invalid response format for generated reply');
     }
-    return BackendGenerateReplyResult.fromJson(decoded);
+    return BackendGeneratedReply.fromJson(decoded);
+  }
+
+  Future<BackendSendReplyResult> sendNotificationReply({
+    required String notificationId,
+    required String reply,
+    String userId = 'default',
+  }) async {
+    final resolvedUserId = userId.trim().isEmpty ? 'default' : userId.trim();
+    final response = await _post(
+      BackendEndpoints.notificationSendReplyUri(notificationId).replace(
+        queryParameters: {'user_id': resolvedUserId},
+      ),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'reply': reply}),
+    );
+    _ensureSuccess(response, 'Failed to send reply');
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Invalid response format for send reply');
+    }
+    return BackendSendReplyResult.fromJson(decoded);
   }
 
   Future<void> enrollVoiceSample({
@@ -571,22 +593,38 @@ class BackendMode {
   );
 }
 
-class BackendGenerateReplyResult {
-  BackendGenerateReplyResult({
+class BackendGeneratedReply {
+  BackendGeneratedReply({
     required this.ok,
-    required this.status,
     required this.reply,
   });
 
   final bool ok;
-  final String status;
   final String reply;
 
-  factory BackendGenerateReplyResult.fromJson(Map<String, dynamic> json) =>
-      BackendGenerateReplyResult(
+  factory BackendGeneratedReply.fromJson(Map<String, dynamic> json) =>
+      BackendGeneratedReply(
+        ok: (json['ok'] as bool?) ?? false,
+        reply: (json['reply'] as String?) ?? '',
+      );
+}
+
+class BackendSendReplyResult {
+  BackendSendReplyResult({
+    required this.ok,
+    required this.status,
+    required this.deliveryNote,
+  });
+
+  final bool ok;
+  final String status;
+  final String deliveryNote;
+
+  factory BackendSendReplyResult.fromJson(Map<String, dynamic> json) =>
+      BackendSendReplyResult(
         ok: (json['ok'] as bool?) ?? false,
         status: (json['status'] as String?) ?? '',
-        reply: (json['reply'] as String?) ?? '',
+        deliveryNote: (json['delivery_note'] as String?) ?? '',
       );
 }
 

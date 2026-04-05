@@ -69,6 +69,8 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/notifications", a.handleListNotifications)
 	mux.HandleFunc("GET /api/notifications/{id}", a.handleGetNotification)
 	mux.HandleFunc("POST /api/notifications/{id}/reply", a.handleGenerateReply)
+	mux.HandleFunc("POST /api/notifications/{id}/reply/generate", a.handleGenerateReplyPreview)
+	mux.HandleFunc("POST /api/notifications/{id}/reply/send", a.handleSendReply)
 	mux.HandleFunc("PUT /api/notifications/{id}/read", a.handleMarkRead)
 	mux.HandleFunc("PUT /api/notifications/{id}/action", a.handleMarkActioned)
 	mux.HandleFunc("DELETE /api/notifications/{id}", a.handleDismiss)
@@ -158,13 +160,19 @@ func (a *API) handleIngest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p, conf, reason, err := a.classifier.Classify(r.Context(), n.AppName, n.Content, activeMode.Name)
-	if err != nil {
-		log.Printf("classifier warning: %v", err)
+	if keywordPriority, keywordReason, matched := services.InferPriorityByKeywords(n.Content); matched {
+		n.Priority = keywordPriority
+		n.Confidence = 0.95
+		n.LabelReason = keywordReason
+	} else {
+		p, conf, reason, err := a.classifier.Classify(r.Context(), n.AppName, n.Content, activeMode.Name)
+		if err != nil {
+			log.Printf("classifier warning: %v", err)
+		}
+		n.Priority = p
+		n.Confidence = conf
+		n.LabelReason = reason
 	}
-	n.Priority = p
-	n.Confidence = conf
-	n.LabelReason = reason
 
 	rules, err := a.store.ListRules(r.Context())
 	if err != nil {
@@ -251,7 +259,7 @@ func (a *API) handleGenerateReply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reply, status, err := a.cortex.GenerateAndSendReply(r.Context(), n)
+	reply, status, detail, err := a.cortex.GenerateAndSendReply(r.Context(), n)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to generate/send reply", "INTERNAL_ERROR")
 		return
@@ -262,11 +270,89 @@ func (a *API) handleGenerateReply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	response := map[string]any{
 		"ok":     true,
 		"status": status,
 		"reply":  reply,
+	}
+	if detail != "" {
+		response["delivery_note"] = detail
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (a *API) handleGenerateReplyPreview(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	userID := normalizeRequestUserID(r)
+
+	n, err := a.store.GetNotification(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch notification", "INTERNAL_ERROR")
+		return
+	}
+	if n == nil || n.UserID != userID {
+		writeError(w, http.StatusNotFound, "notification not found", "NOT_FOUND")
+		return
+	}
+
+	reply, err := a.cortex.GenerateReply(r.Context(), n)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to generate reply", "INTERNAL_ERROR")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":    true,
+		"reply": reply,
 	})
+}
+
+func (a *API) handleSendReply(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	userID := normalizeRequestUserID(r)
+
+	n, err := a.store.GetNotification(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch notification", "INTERNAL_ERROR")
+		return
+	}
+	if n == nil || n.UserID != userID {
+		writeError(w, http.StatusNotFound, "notification not found", "NOT_FOUND")
+		return
+	}
+
+	var payload struct {
+		Reply string `json:"reply"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json body", "VALIDATION_ERROR")
+		return
+	}
+	payload.Reply = strings.TrimSpace(payload.Reply)
+	if payload.Reply == "" {
+		writeError(w, http.StatusBadRequest, "reply is required", "VALIDATION_ERROR")
+		return
+	}
+
+	status, detail, err := a.cortex.SendReply(r.Context(), n, payload.Reply)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to send reply", "INTERNAL_ERROR")
+		return
+	}
+
+	if err := a.store.MarkActioned(r.Context(), id); err != nil && err != mongo.ErrNoDocuments {
+		writeError(w, http.StatusInternalServerError, "failed to mark notification actioned", "INTERNAL_ERROR")
+		return
+	}
+
+	response := map[string]any{
+		"ok":     true,
+		"status": status,
+	}
+	if detail != "" {
+		response["delivery_note"] = detail
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (a *API) handleMarkRead(w http.ResponseWriter, r *http.Request) {

@@ -1,6 +1,51 @@
 {
   "notifications": [
     {
+      "id": "651bee34-7c80-4cf3-8a6c-40b477596389",
+      "user_id": "default",
+      "content": "whatsapp send check",
+      "app_name": "WhatsApp",
+      "app_package": "com.whatsapp",
+      "sender_name": "+919876543210",
+      "priority": "HIGH",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": true,
+      "confidence": 0.378145,
+      "label_reason": "content_platform_mode_context_signal_prediction",
+      "timestamp": "2026-04-05T03:06:55.136Z"
+    },
+    {
+      "id": "91bf1a0d-0b54-4f63-b7e7-9e11bd9e7852",
+      "user_id": "default",
+      "content": "two step manual reply test",
+      "app_name": "Slack",
+      "app_package": "com.slack",
+      "sender_name": "",
+      "priority": "HIGH",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": true,
+      "confidence": 0.411687,
+      "label_reason": "content_platform_mode_context_signal_prediction",
+      "timestamp": "2026-04-05T03:02:36.987Z"
+    },
+    {
+      "id": "cbe44d4a-1072-4829-b769-a8b0f1ec3078",
+      "user_id": "default",
+      "content": "two step manual reply test",
+      "app_name": "Slack",
+      "app_package": "com.slack",
+      "sender_name": "",
+      "priority": "HIGH",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0.411687,
+      "label_reason": "content_platform_mode_context_signal_prediction",
+      "timestamp": "2026-04-05T03:01:50.353Z"
+    },
+    {
       "id": "1ff6cf99-83ce-4c8f-b103-422d7ab847f2",
       "user_id": "default",
       "content": "manual reply button test",
@@ -226,6 +271,6 @@
       "timestamp": "2026-04-05T01:37:41.889Z"
     }
   ],
-  "updated_at": "2026-04-05T02:56:38.405076692Z",
+  "updated_at": "2026-04-05T03:06:56.632760808Z",
   "user_id": "default"
 }

@@ -1,0 +1,51 @@
+{
+  "notifications": [
+    {
+      "id": "47542269-bb4c-4331-a05e-5c6b19a66fdd",
+      "user_id": "u_kw3",
+      "content": "urgent please check this now",
+      "app_name": "WhatsApp",
+      "app_package": "com.whatsapp",
+      "sender_name": "",
+      "priority": "HIGH",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0.95,
+      "label_reason": "keyword_high",
+      "timestamp": "2026-04-05T03:35:45.63Z"
+    },
+    {
+      "id": "d5a5e19e-1709-419e-9a81-d5dbd5e23fa3",
+      "user_id": "u_kw3",
+      "content": "newsletter update no rush",
+      "app_name": "WhatsApp",
+      "app_package": "com.whatsapp",
+      "sender_name": "",
+      "priority": "LOW",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0.95,
+      "label_reason": "keyword_low",
+      "timestamp": "2026-04-05T03:35:45.627Z"
+    },
+    {
+      "id": "e213d4c2-d3b0-4868-bcd4-015d70d9ae9a",
+      "user_id": "u_kw3",
+      "content": "low: ping me later",
+      "app_name": "WhatsApp",
+      "app_package": "com.whatsapp",
+      "sender_name": "",
+      "priority": "LOW",
+      "mode": "mode 1",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0.95,
+      "label_reason": "keyword_low",
+      "timestamp": "2026-04-05T03:35:45.624Z"
+    }
+  ],
+  "updated_at": "2026-04-05T03:35:45.632047351Z",
+  "user_id": "u_kw3"
+}

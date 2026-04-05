@@ -45,6 +45,12 @@ class BackendEndpoints {
     static Uri notificationGenerateReplyUri(String id) =>
       Uri.parse('http://$host:$port/api/notifications/$id/reply');
 
+    static Uri notificationGeneratePreviewReplyUri(String id) =>
+      Uri.parse('http://$host:$port/api/notifications/$id/reply/generate');
+
+    static Uri notificationSendReplyUri(String id) =>
+      Uri.parse('http://$host:$port/api/notifications/$id/reply/send');
+
     static Uri get modesUri => Uri.parse('http://$host:$port/api/modes');
 
     static Uri modeByIdUri(String id) => Uri.parse('http://$host:$port/api/modes/$id');

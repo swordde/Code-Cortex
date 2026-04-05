@@ -103,21 +103,52 @@ func (c *CortexService) MaybeAutoReply(ctx context.Context, n *models.Notificati
 	}
 }
 
-func (c *CortexService) GenerateAndSendReply(ctx context.Context, n *models.Notification) (string, string, error) {
+func (c *CortexService) GenerateAndSendReply(ctx context.Context, n *models.Notification) (string, string, string, error) {
+	reply, err := c.GenerateReply(ctx, n)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	status, detail, err := c.SendReply(ctx, n, reply)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	return reply, status, detail, nil
+}
+
+func (c *CortexService) GenerateReply(ctx context.Context, n *models.Notification) (string, error) {
 	if n == nil {
-		return "", "", fmt.Errorf("notification is required")
+		return "", fmt.Errorf("notification is required")
 	}
 
 	tone := toneFromMode(n.Mode)
 	aiResp, err := c.callCortexReply(ctx, n, tone)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
 	reply := strings.TrimSpace(aiResp.Reply)
 	if reply == "" {
-		return "", "", fmt.Errorf("empty reply generated")
+		return "", fmt.Errorf("empty reply generated")
 	}
+
+	return reply, nil
+}
+
+func (c *CortexService) SendReply(ctx context.Context, n *models.Notification, reply string) (string, string, error) {
+	if n == nil {
+		return "", "", fmt.Errorf("notification is required")
+	}
+	reply = strings.TrimSpace(reply)
+	if reply == "" {
+		return "", "", fmt.Errorf("reply is required")
+	}
+
+	return c.sendReplyWithStatus(ctx, n, reply)
+}
+
+func (c *CortexService) sendReplyWithStatus(ctx context.Context, n *models.Notification, reply string) (string, string, error) {
 
 	if err := c.replySender.Send(ctx, n, reply); err != nil {
 		log.Printf("cortex delivery warning: sender=%s notification_id=%s err=%v", c.replySender.Name(), n.ID, err)
@@ -127,7 +158,7 @@ func (c *CortexService) GenerateAndSendReply(ctx context.Context, n *models.Noti
 		if activityErr := c.logActivity(ctx, n.ID, "delivery_failed_drafted", reply); activityErr != nil {
 			return "", "", activityErr
 		}
-		return reply, "drafted", nil
+		return "drafted", err.Error(), nil
 	}
 
 	if err := c.logActivity(ctx, n.ID, "auto_replied", reply); err != nil {
@@ -135,7 +166,7 @@ func (c *CortexService) GenerateAndSendReply(ctx context.Context, n *models.Noti
 	}
 	entry := models.CortexActivityEntry{ID: uuid.NewString(), NotificationID: n.ID, Action: "auto_replied", Body: reply, Timestamp: time.Now().UTC()}
 	c.dispatcher.DispatchCortexAction(&entry)
-	return reply, "sent", nil
+	return "sent", "", nil
 }
 
 func shouldDirectSendLowPriority(n *models.Notification, sender ReplySender) bool {
@@ -146,20 +177,8 @@ func shouldDirectSendLowPriority(n *models.Notification, sender ReplySender) boo
 }
 
 func (c *CortexService) sendReplyOrFallbackDraft(ctx context.Context, n *models.Notification, reply string) error {
-	if err := c.replySender.Send(ctx, n, reply); err != nil {
-		log.Printf("cortex delivery warning: sender=%s notification_id=%s err=%v", c.replySender.Name(), n.ID, err)
-		if draftErr := c.createScheduledMessage(ctx, n.ID, reply); draftErr != nil {
-			return draftErr
-		}
-		return c.logActivity(ctx, n.ID, "delivery_failed_drafted", reply)
-	}
-
-	if err := c.logActivity(ctx, n.ID, "auto_replied", reply); err != nil {
-		return err
-	}
-	entry := models.CortexActivityEntry{ID: uuid.NewString(), NotificationID: n.ID, Action: "auto_replied", Body: reply, Timestamp: time.Now().UTC()}
-	c.dispatcher.DispatchCortexAction(&entry)
-	return nil
+	_, _, err := c.sendReplyWithStatus(ctx, n, reply)
+	return err
 }
 
 func shouldGenerateCortexReply(n *models.Notification) (bool, string) {

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api_client.dart';
 import '../models/app_notification.dart';
@@ -53,18 +55,42 @@ class _NotificationListScreenState extends State<NotificationListScreen> {
     });
 
     try {
-      final result = await _apiClient.generateAndSendNotificationReply(
+      final generated = await _apiClient.generateNotificationReply(
         notificationId: notificationId,
         userId: widget.userId,
       );
       if (!mounted) return;
-      final sent = result.status == 'sent';
+
+      final replyToSend = await _showReplyPreviewDialog(generated.reply);
+      if (!mounted) return;
+      if (replyToSend == null || replyToSend.trim().isEmpty) {
+        return;
+      }
+
+      final sendResult = await _apiClient.sendNotificationReply(
+        notificationId: notificationId,
+        userId: widget.userId,
+        reply: replyToSend,
+      );
+      if (!mounted) return;
+      final sent = sendResult.status == 'sent';
+      final deliveryNote = sendResult.deliveryNote.trim();
+      if (!sent) {
+        await Clipboard.setData(ClipboardData(text: replyToSend));
+        if (!mounted) return;
+        if (_isWhatsAppNotification(item)) {
+          await _openWhatsApp(item, replyToSend);
+          if (!mounted) return;
+        }
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             sent
                 ? 'Reply sent successfully.'
-                : 'Reply generated and saved as draft.',
+                : deliveryNote.isEmpty
+                    ? 'Reply saved as draft and copied to clipboard.'
+                    : 'Reply drafted and copied to clipboard: $deliveryNote',
           ),
         ),
       );
@@ -82,6 +108,86 @@ class _NotificationListScreenState extends State<NotificationListScreen> {
           _sendingIds.remove(notificationId);
         });
       }
+    }
+  }
+
+  bool _isWhatsAppNotification(AppNotification item) {
+    final combined = '${item.appPackage} ${item.source}'.toLowerCase();
+    return combined.contains('whatsapp');
+  }
+
+  String? _extractPhoneNumber(String raw) {
+    if (raw.trim().isEmpty) return null;
+    final match = RegExp(r'\+?[0-9][0-9\s\-]{6,17}').firstMatch(raw);
+    if (match == null) return null;
+    final cleaned = match.group(0)!.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (cleaned.length < 7) return null;
+    return cleaned;
+  }
+
+  Future<void> _openWhatsApp(AppNotification item, String replyText) async {
+    final phone = _extractPhoneNumber(item.senderName);
+    final queryParams = <String, String>{'text': replyText};
+    if (phone != null) {
+      queryParams['phone'] = phone;
+    }
+    final deepLink = Uri(
+      scheme: 'whatsapp',
+      host: 'send',
+      queryParameters: queryParams,
+    );
+    try {
+      final launched = await launchUrl(
+        deepLink,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open WhatsApp automatically.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open WhatsApp automatically.')),
+        );
+      }
+    }
+  }
+
+  Future<String?> _showReplyPreviewDialog(String initialReply) async {
+    final controller = TextEditingController(text: initialReply);
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Generated Reply'),
+            content: TextField(
+              controller: controller,
+              minLines: 3,
+              maxLines: 8,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'Reply message',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () =>
+                    Navigator.of(dialogContext).pop(controller.text.trim()),
+                child: const Text('Send'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
     }
   }
 
@@ -118,7 +224,7 @@ class _NotificationListScreenState extends State<NotificationListScreen> {
                             onPressed: sending
                                 ? null
                                 : () => _handleGenerateReply(item),
-                            child: Text(sending ? 'Sending...' : 'Generate Reply'),
+                            child: Text(sending ? 'Processing...' : 'Generate Reply'),
                           ),
                         ),
                       ],

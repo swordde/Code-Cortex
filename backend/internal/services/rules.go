@@ -30,8 +30,11 @@ func ApplyRules(n *models.Notification, rules []models.Rule, mode *models.Mode) 
 			}
 		case "app":
 			if rule.AppPackage != "" && n.AppPackage == rule.AppPackage {
-				current = minPriority(current, rule.Priority)
-				reason = "app_rule"
+				next := minPriority(current, rule.Priority)
+				if next != current {
+					current = next
+					reason = "app_rule"
+				}
 			}
 		case "time":
 			if withinTimeWindow(rule.TimeStart, rule.TimeEnd, time.Now()) {
@@ -44,8 +47,11 @@ func ApplyRules(n *models.Notification, rules []models.Rule, mode *models.Mode) 
 	if mode != nil {
 		for _, appCap := range mode.AppCaps {
 			if appCap.AppPackage == n.AppPackage {
-				current = minPriority(current, appCap.MaxPriority)
-				reason = "mode_app_cap"
+				next := minPriority(current, appCap.MaxPriority)
+				if next != current {
+					current = next
+					reason = "mode_app_cap"
+				}
 			}
 		}
 	}
