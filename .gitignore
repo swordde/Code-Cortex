@@ -65,3 +65,6 @@ backend/*.sqlite3
 # Cloud credentials
 *credentials*.json
 *service-account*.json
+
+# Documentation files
+docs/**/*.md
