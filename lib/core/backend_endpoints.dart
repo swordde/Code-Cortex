@@ -42,6 +42,9 @@ class BackendEndpoints {
     static Uri notificationByIdUri(String id) =>
       Uri.parse('http://$host:$port/api/notifications/$id');
 
+    static Uri notificationGenerateReplyUri(String id) =>
+      Uri.parse('http://$host:$port/api/notifications/$id/reply');
+
     static Uri get modesUri => Uri.parse('http://$host:$port/api/modes');
 
     static Uri modeByIdUri(String id) => Uri.parse('http://$host:$port/api/modes/$id');
@@ -95,4 +98,7 @@ class BackendEndpoints {
 
     static Uri get aiVoiceAssistantReaderCommandUri =>
       Uri.parse('http://$host:$port/api/ai/voice-assistant/reader/command');
+
+    static Uri get aiVoiceAssistantReaderResetUri =>
+      Uri.parse('http://$host:$port/api/ai/voice-assistant/reader/reset');
 }

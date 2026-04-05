@@ -13,6 +13,7 @@ const (
 
 type Notification struct {
 	ID          string    `json:"id" bson:"_id"`
+	UserID      string    `json:"user_id" bson:"user_id"`
 	Content     string    `json:"content" bson:"content"`
 	AppName     string    `json:"app_name" bson:"app_name"`
 	AppPackage  string    `json:"app_package" bson:"app_package"`

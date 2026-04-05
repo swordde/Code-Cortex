@@ -36,8 +36,13 @@ class ApiClient {
   Future<http.Response> _delete(Uri uri) =>
       _client.delete(uri).timeout(_requestTimeout);
 
-  Future<List<AppNotification>> fetchNotifications() async {
-    final response = await _get(BackendEndpoints.notificationsUri);
+  Future<List<AppNotification>> fetchNotifications({String userId = 'default'}) async {
+    final resolvedUserId = userId.trim().isEmpty ? 'default' : userId.trim();
+    final response = await _get(
+      BackendEndpoints.notificationsUri.replace(
+        queryParameters: {'user_id': resolvedUserId},
+      ),
+    );
     _ensureSuccess(response, 'Failed to load notifications');
 
     final decoded = jsonDecode(response.body);
@@ -56,6 +61,7 @@ class ApiClient {
     required String content,
     String appName = 'Unknown',
     String senderName = '',
+    String userId = 'default',
   }) async {
     final normalizedContent = content.trim();
     if (appPackage.trim().isEmpty || normalizedContent.isEmpty) {
@@ -66,6 +72,7 @@ class ApiClient {
       BackendEndpoints.notificationsIngestUri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
+        'user_id': userId,
         'app_package': appPackage,
         'app_name': appName,
         'sender_name': senderName,
@@ -73,6 +80,27 @@ class ApiClient {
       }),
     );
     _ensureSuccess(response, 'Failed to ingest notification');
+  }
+
+  Future<BackendGenerateReplyResult> generateAndSendNotificationReply({
+    required String notificationId,
+    String userId = 'default',
+  }) async {
+    final resolvedUserId = userId.trim().isEmpty ? 'default' : userId.trim();
+    final response = await _post(
+      BackendEndpoints.notificationGenerateReplyUri(notificationId).replace(
+        queryParameters: {'user_id': resolvedUserId},
+      ),
+      headers: {'Content-Type': 'application/json'},
+      body: '{}',
+    );
+    _ensureSuccess(response, 'Failed to generate reply');
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Invalid response format for generated reply');
+    }
+    return BackendGenerateReplyResult.fromJson(decoded);
   }
 
   Future<void> enrollVoiceSample({
@@ -176,6 +204,22 @@ class ApiClient {
     return null;
   }
 
+  Future<String?> transcribeVoiceAssistantFromFile({
+    required String filePath,
+    String mimeType = 'audio/mp4',
+  }) async {
+    final bytes = await readBytesFromPath(filePath);
+    if (bytes == null || bytes.isEmpty) {
+      return null;
+    }
+
+    final audioBase64 = base64Encode(bytes);
+    return transcribeVoiceAssistant(
+      audioBase64: audioBase64,
+      mimeType: mimeType,
+    );
+  }
+
   Future<Map<String, dynamic>> sendVoiceAssistantReaderCommand({
     required String transcript,
   }) async {
@@ -191,6 +235,15 @@ class ApiClient {
       throw Exception('Invalid reader command response');
     }
     return decoded;
+  }
+
+  Future<void> resetVoiceAssistantReader() async {
+    final response = await _post(
+      BackendEndpoints.aiVoiceAssistantReaderResetUri,
+      headers: {'Content-Type': 'application/json'},
+      body: '{}',
+    );
+    _ensureSuccess(response, 'Failed to reset reader state');
   }
 
   Future<List<BackendMode>> fetchModes() async {
@@ -516,6 +569,25 @@ class BackendMode {
     scheduleEnd: scheduleEnd ?? this.scheduleEnd,
     scheduleDays: scheduleDays ?? this.scheduleDays,
   );
+}
+
+class BackendGenerateReplyResult {
+  BackendGenerateReplyResult({
+    required this.ok,
+    required this.status,
+    required this.reply,
+  });
+
+  final bool ok;
+  final String status;
+  final String reply;
+
+  factory BackendGenerateReplyResult.fromJson(Map<String, dynamic> json) =>
+      BackendGenerateReplyResult(
+        ok: (json['ok'] as bool?) ?? false,
+        status: (json['status'] as String?) ?? '',
+        reply: (json['reply'] as String?) ?? '',
+      );
 }
 
 class BackendAppCap {

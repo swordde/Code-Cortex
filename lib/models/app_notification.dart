@@ -2,15 +2,25 @@ enum NotificationCategory { emergency, highPriority, medium, low }
 
 class AppNotification {
   const AppNotification({
+    required this.id,
+    required this.userId,
     required this.title,
     required this.source,
+    required this.appPackage,
+    required this.priority,
+    required this.confidence,
     required this.urgencyScore,
     required this.userRuleBoost,
     required this.createdAt,
   });
 
+  final String id;
+  final String userId;
   final String title;
   final String source;
+  final String appPackage;
+  final String priority;
+  final double confidence;
   final int urgencyScore;
   final int userRuleBoost;
   final DateTime createdAt;
@@ -33,8 +43,13 @@ class AppNotification {
     }
 
     return AppNotification(
+      id: (json['id'] as String?) ?? '',
+      userId: (json['user_id'] as String?) ?? 'default',
       title: (json['content'] as String?) ?? 'Notification',
       source: (json['app_name'] as String?) ?? 'Unknown',
+      appPackage: (json['app_package'] as String?) ?? '',
+      priority: priority,
+      confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
       urgencyScore: urgency,
       userRuleBoost: 0,
       createdAt: parsedTime,

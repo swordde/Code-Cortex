@@ -19,7 +19,7 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	mongoStore, err := store.NewMongoStore(ctx, cfg.MongoURI, cfg.MongoDBName, cfg.MongoTimeout, cfg.MongoInsecure)
+	mongoStore, err := store.NewMongoStore(ctx, cfg.MongoURI, cfg.MongoDBName, cfg.MongoTimeout, cfg.MongoInsecure, cfg.NotificationsJSONDir)
 	if err != nil {
 		log.Fatalf("failed connecting MongoDB: %v", err)
 	}
@@ -31,7 +31,6 @@ func main() {
 
 	dispatcher := services.NewPushDispatcher(cfg.UnixSocketPath)
 	aiProxy := services.NewAIProxyService(cfg.AIServiceURL, cfg.AITimeoutSec)
-	voiceRuntime := services.NewVoiceAssistantRuntimeService(aiProxy)
 	modelStatus := services.NewModelStatusService(aiProxy)
 	modelStatus.Start(context.Background())
 	classifier := services.NewClassifierService(cfg.AIServiceURL, cfg.AITimeoutSec)
@@ -41,7 +40,20 @@ func main() {
 	if err := modeManager.Init(context.Background()); err != nil {
 		log.Fatalf("failed to initialize mode manager: %v", err)
 	}
-	cortexService := services.NewCortexService(mongoStore, dispatcher, cfg.AIServiceURL, cfg.AITimeoutSec)
+
+	replySender := services.NewPlatformReplySender(
+		cfg.ReplyWebhookURL,
+		map[string]string{
+			"slack": cfg.ReplyWebhookSlackURL,
+			"whatsapp": cfg.ReplyWebhookWhatsAppURL,
+			"teams": cfg.ReplyWebhookTeamsURL,
+			"discord": cfg.ReplyWebhookDiscordURL,
+		},
+		cfg.AITimeoutSec,
+	)
+	log.Printf("reply sender configured: %s", replySender.Name())
+
+	cortexService := services.NewCortexService(mongoStore, dispatcher, cfg.AIServiceURL, cfg.AITimeoutSec, replySender)
 
 	api := server.NewAPI(cfg, mongoStore, classifier, feedback, analyticsService, modeManager, cortexService, aiProxy, modelStatus, dispatcher)
 
@@ -63,7 +75,12 @@ func main() {
 		}
 	}()
 
-	voiceRuntime.Start(ctx)
+	if cfg.EnableVoiceAssistant {
+		voiceRuntime := services.NewVoiceAssistantRuntimeService(aiProxy)
+		voiceRuntime.Start(ctx)
+	} else {
+		log.Printf("voice assistant runtime disabled (SNP_ENABLE_VOICE_ASSISTANT=false)")
+	}
 
 	<-ctx.Done()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

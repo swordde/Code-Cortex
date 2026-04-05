@@ -1,0 +1,36 @@
+{
+  "notifications": [
+    {
+      "id": "f0d5652a-a3e2-4274-be44-71454f9ae16a",
+      "user_id": "diag_user",
+      "content": "classifier check after url update",
+      "app_name": "Chat",
+      "app_package": "com.chat.app",
+      "sender_name": "Bob",
+      "priority": "MEDIUM",
+      "mode": "Mode 12",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0,
+      "label_reason": "fallback:server_error",
+      "timestamp": "2026-04-05T01:54:25.359Z"
+    },
+    {
+      "id": "a6fc86c2-f549-4832-8a59-9fd21dce0379",
+      "user_id": "diag_user",
+      "content": "classifier diag message",
+      "app_name": "Chat",
+      "app_package": "com.chat.app",
+      "sender_name": "Bob",
+      "priority": "MEDIUM",
+      "mode": "Mode 12",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0,
+      "label_reason": "fallback:server_error",
+      "timestamp": "2026-04-05T01:47:28.916Z"
+    }
+  ],
+  "updated_at": "2026-04-05T01:54:25.780937577Z",
+  "user_id": "diag_user"
+}

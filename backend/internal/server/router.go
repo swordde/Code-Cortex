@@ -68,6 +68,7 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("POST /api/notifications/ingest", a.handleIngest)
 	mux.HandleFunc("GET /api/notifications", a.handleListNotifications)
 	mux.HandleFunc("GET /api/notifications/{id}", a.handleGetNotification)
+	mux.HandleFunc("POST /api/notifications/{id}/reply", a.handleGenerateReply)
 	mux.HandleFunc("PUT /api/notifications/{id}/read", a.handleMarkRead)
 	mux.HandleFunc("PUT /api/notifications/{id}/action", a.handleMarkActioned)
 	mux.HandleFunc("DELETE /api/notifications/{id}", a.handleDismiss)
@@ -105,10 +106,11 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/ai/voice-assistant/status", a.handleAIVoiceAssistantStatus)
 	mux.HandleFunc("POST /api/ai/voice-assistant/transcribe", a.handleAIVoiceAssistantTranscribe)
 	mux.HandleFunc("POST /api/ai/voice-assistant/reader/command", a.handleAIVoiceAssistantReaderCommand)
+	mux.HandleFunc("POST /api/ai/voice-assistant/reader/reset", a.handleAIVoiceAssistantReaderReset)
 	mux.HandleFunc("GET /api/profile", a.handleGetProfile)
 	mux.HandleFunc("PUT /api/profile", a.handleUpdateProfile)
 	mux.HandleFunc("POST /api/profile/avatar", a.handleUploadAvatar)
-	return corsMiddleware(mux)
+	return corsMiddleware(requestIDMiddleware(mux))
 }
 
 func (a *API) handleWS(w http.ResponseWriter, r *http.Request) {
@@ -140,6 +142,9 @@ func (a *API) handleIngest(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.TrimSpace(n.AppName) == "" {
 		n.AppName = n.AppPackage
+	}
+	if strings.TrimSpace(n.UserID) == "" {
+		n.UserID = "default"
 	}
 
 	n.ID = uuid.NewString()
@@ -196,7 +201,16 @@ func (a *API) handleIngest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleListNotifications(w http.ResponseWriter, r *http.Request) {
-	items, err := a.store.ListNotifications(r.Context())
+	userID := strings.TrimSpace(r.URL.Query().Get("user_id"))
+	var (
+		items []models.Notification
+		err   error
+	)
+	if userID == "" {
+		items, err = a.store.ListNotifications(r.Context())
+	} else {
+		items, err = a.store.ListNotificationsByUser(r.Context(), userID)
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list notifications", "INTERNAL_ERROR")
 		return
@@ -206,6 +220,7 @@ func (a *API) handleListNotifications(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) handleGetNotification(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	userID := normalizeRequestUserID(r)
 	n, err := a.store.GetNotification(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to fetch notification", "INTERNAL_ERROR")
@@ -215,12 +230,58 @@ func (a *API) handleGetNotification(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "notification not found", "NOT_FOUND")
 		return
 	}
+	if n.UserID != userID {
+		writeError(w, http.StatusNotFound, "notification not found", "NOT_FOUND")
+		return
+	}
 	writeJSON(w, http.StatusOK, n)
+}
+
+func (a *API) handleGenerateReply(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	userID := normalizeRequestUserID(r)
+
+	n, err := a.store.GetNotification(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch notification", "INTERNAL_ERROR")
+		return
+	}
+	if n == nil || n.UserID != userID {
+		writeError(w, http.StatusNotFound, "notification not found", "NOT_FOUND")
+		return
+	}
+
+	reply, status, err := a.cortex.GenerateAndSendReply(r.Context(), n)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to generate/send reply", "INTERNAL_ERROR")
+		return
+	}
+
+	if err := a.store.MarkActioned(r.Context(), id); err != nil && err != mongo.ErrNoDocuments {
+		writeError(w, http.StatusInternalServerError, "failed to mark notification actioned", "INTERNAL_ERROR")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":     true,
+		"status": status,
+		"reply":  reply,
+	})
 }
 
 func (a *API) handleMarkRead(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	err := a.store.MarkRead(r.Context(), id)
+	userID := normalizeRequestUserID(r)
+	n, err := a.store.GetNotification(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch notification", "INTERNAL_ERROR")
+		return
+	}
+	if n == nil || n.UserID != userID {
+		writeError(w, http.StatusNotFound, "notification not found", "NOT_FOUND")
+		return
+	}
+	err = a.store.MarkRead(r.Context(), id)
 	if err == mongo.ErrNoDocuments {
 		writeError(w, http.StatusNotFound, "notification not found", "NOT_FOUND")
 		return
@@ -234,12 +295,13 @@ func (a *API) handleMarkRead(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) handleMarkActioned(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	userID := normalizeRequestUserID(r)
 	n, err := a.store.GetNotification(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to fetch notification", "INTERNAL_ERROR")
 		return
 	}
-	if n == nil {
+	if n == nil || n.UserID != userID {
 		writeError(w, http.StatusNotFound, "notification not found", "NOT_FOUND")
 		return
 	}
@@ -275,7 +337,17 @@ func (a *API) handleMarkActioned(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) handleDismiss(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	err := a.store.SoftDeleteNotification(r.Context(), id)
+	userID := normalizeRequestUserID(r)
+	n, err := a.store.GetNotification(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch notification", "INTERNAL_ERROR")
+		return
+	}
+	if n == nil || n.UserID != userID {
+		writeError(w, http.StatusNotFound, "notification not found", "NOT_FOUND")
+		return
+	}
+	err = a.store.SoftDeleteNotification(r.Context(), id)
 	if err == mongo.ErrNoDocuments {
 		writeError(w, http.StatusNotFound, "notification not found", "NOT_FOUND")
 		return
@@ -789,6 +861,10 @@ func (a *API) handleAIVoiceAssistantReaderCommand(w http.ResponseWriter, r *http
 	a.handleAIProxy(w, r, http.MethodPost, "/voice-assistant/reader/command")
 }
 
+func (a *API) handleAIVoiceAssistantReaderReset(w http.ResponseWriter, r *http.Request) {
+	a.handleAIProxy(w, r, http.MethodPost, "/voice-assistant/reader/reset")
+}
+
 func (a *API) handleAIProxy(w http.ResponseWriter, r *http.Request, method, path string) {
 	var body []byte
 	if r.Body != nil {
@@ -866,6 +942,16 @@ func (a *API) handleUploadAvatar(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"avatar_path": path})
 }
 
+func normalizeRequestUserID(r *http.Request) string {
+	raw := strings.TrimSpace(r.URL.Query().Get("user_id"))
+	if raw == "" {
+		return "default"
+	}
+	raw = strings.ToLower(raw)
+	replacer := strings.NewReplacer("/", "_", "\\", "_", " ", "_", ":", "_", "*", "_", "?", "_", "\"", "_", "<", "_", ">", "_", "|", "_")
+	return replacer.Replace(raw)
+}
+
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -886,11 +972,21 @@ func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Request-ID")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func requestIDMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		incomingID := strings.TrimSpace(r.Header.Get("X-Request-ID"))
+		requestID := services.EnsureRequestID(incomingID)
+		w.Header().Set("X-Request-ID", requestID)
+		r = r.WithContext(services.WithRequestID(r.Context(), requestID))
 		next.ServeHTTP(w, r)
 	})
 }

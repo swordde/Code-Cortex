@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -16,6 +17,9 @@ type ModelStatusCache struct {
 	LastFinetuneTimestamp string    `json:"last_finetune_timestamp"`
 	SampleCount           int       `json:"sample_count"`
 	ModelLoaded           bool      `json:"model_loaded"`
+	ClassificationReady   bool      `json:"classification_ready"`
+	InferenceProbeOK      bool      `json:"inference_probe_ok"`
+	InferenceProbeReason  string    `json:"inference_probe_reason,omitempty"`
 	FetchedAt             time.Time `json:"fetched_at"`
 }
 
@@ -68,12 +72,52 @@ func (s *ModelStatusService) Refresh(ctx context.Context) error {
 	if err := json.Unmarshal(body, &parsed); err != nil {
 		return err
 	}
+
+	probeOK, probeReason := s.runClassifyProbe(ctx)
+	parsed.ClassificationReady = probeOK
+	parsed.InferenceProbeOK = probeOK
+	parsed.InferenceProbeReason = probeReason
 	parsed.FetchedAt = time.Now().UTC()
 
 	s.mu.Lock()
 	s.data = parsed
 	s.mu.Unlock()
 	return nil
+}
+
+func (s *ModelStatusService) runClassifyProbe(ctx context.Context) (bool, string) {
+	payload := map[string]any{
+		"content": "health probe: critical outage in payment service",
+		"app":     "healthcheck",
+		"mode":    "office",
+		"user_id": "healthcheck",
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return false, "probe_encode_error"
+	}
+
+	respBody, status, err := s.proxy.ProxyToAI(ctx, http.MethodPost, "/classify", body)
+	if err != nil {
+		return false, "probe_upstream_error"
+	}
+	if status < 200 || status >= 300 {
+		return false, fmt.Sprintf("probe_status_%d", status)
+	}
+
+	var parsed struct {
+		Priority   string  `json:"priority"`
+		Confidence float64 `json:"confidence"`
+		Reason     string  `json:"label_reason"`
+	}
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		return false, "probe_decode_error"
+	}
+	if strings.TrimSpace(parsed.Priority) == "" || strings.TrimSpace(parsed.Reason) == "" {
+		return false, "probe_invalid_payload"
+	}
+
+	return true, "ok"
 }
 
 func (s *ModelStatusService) GetModelStatus() *ModelStatusCache {

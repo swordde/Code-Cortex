@@ -1,0 +1,21 @@
+{
+  "notifications": [
+    {
+      "id": "12fc903c-32ff-4653-80f7-228c9cca0ff3",
+      "user_id": "qa_user",
+      "content": "urgent please call me now",
+      "app_name": "WhatsApp",
+      "app_package": "com.whatsapp",
+      "sender_name": "Alice",
+      "priority": "MEDIUM",
+      "mode": "Mode 15",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0,
+      "label_reason": "fallback:server_error",
+      "timestamp": "2026-04-05T01:41:05.475Z"
+    }
+  ],
+  "updated_at": "2026-04-05T01:41:06.01725334Z",
+  "user_id": "qa_user"
+}

@@ -1,0 +1,21 @@
+{
+  "notifications": [
+    {
+      "id": "1c21f7b8-46b1-4efe-896c-e1ce8ee7075d",
+      "user_id": "bob",
+      "content": "Weekly update",
+      "app_name": "Mail",
+      "app_package": "com.mail.app",
+      "sender_name": "Team",
+      "priority": "MEDIUM",
+      "mode": "Mode 5",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0,
+      "label_reason": "fallback:server_error",
+      "timestamp": "2026-04-05T01:34:08.636Z"
+    }
+  ],
+  "updated_at": "2026-04-05T01:34:09.082006281Z",
+  "user_id": "bob"
+}

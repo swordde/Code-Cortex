@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../core/android_notification_listener_service.dart';
 import '../core/api_client.dart';
+import '../core/voice_recorder_service.dart';
 import '../core/websocket_service.dart';
 import '../models/app_notification.dart';
+import '../state/user_profile_store.dart';
 import '../widgets/ai_orb_fab.dart';
 import '../widgets/priority_card.dart';
 import '../widgets/today_notification_card.dart';
@@ -26,7 +28,9 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _tapWaveController;
   late final ApiClient _apiClient;
+  late final VoiceRecorderService _voiceRecorderService;
   late final WebsocketService _websocketService;
+  late final UserProfileStore _userProfileStore;
   StreamSubscription<AppNotification>? _wsSubscription;
   StreamSubscription<AndroidNotificationEvent>? _nativeNotificationSubscription;
   Timer? _pollTimer;
@@ -46,7 +50,9 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _apiClient = ApiClient();
+    _voiceRecorderService = VoiceRecorderService();
     _websocketService = WebsocketService();
+    _userProfileStore = UserProfileStore.instance;
     _tapWaveController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -67,6 +73,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
     _nativeNotificationSubscription?.cancel();
     _pollTimer?.cancel();
     unawaited(_websocketService.disconnect());
+    unawaited(_voiceRecorderService.dispose());
     _tapWaveController.dispose();
     super.dispose();
   }
@@ -81,7 +88,9 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
 
   Future<void> _loadFromBackend() async {
     try {
-      final backendItems = await _apiClient.fetchNotifications();
+      final backendItems = await _apiClient.fetchNotifications(
+        userId: _currentUserId(),
+      );
       if (!mounted) return;
 
       setState(() {
@@ -101,9 +110,8 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
   void _connectWebsocket() {
     _wsSubscription?.cancel();
     _wsSubscription = _websocketService.connect().listen(
-      (notification) {
+      (_) {
         if (!mounted) return;
-        _insertNotification(notification);
         unawaited(_loadFromBackend());
       },
       onError: (_) {
@@ -157,6 +165,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
         appName: event.appName,
         senderName: event.title,
         content: event.content,
+        userId: _currentUserId(),
       );
       await _loadFromBackend();
     } catch (_) {
@@ -164,37 +173,12 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
     }
   }
 
-  void _insertNotification(AppNotification notification) {
-    final category = _categorize(notification);
-    final key = _notificationKey(notification);
-    final existing = _notificationsByCategory.values.expand((e) => e).any(
-      (item) => _notificationKey(item) == key,
-    );
-    if (existing) return;
-
-    setState(() {
-      _notificationsByCategory[category]!.insert(0, notification);
-    });
-    _showNotificationPopup(notification);
-  }
-
-  void _showNotificationPopup(AppNotification notification) {
-    if (!mounted) return;
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger == null) return;
-
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-        content: Text('${notification.source}: ${notification.title}'),
-      ),
-    );
-  }
-
-  String _notificationKey(AppNotification n) {
-    return '${n.source}|${n.title}|${n.createdAt.toIso8601String()}';
+  String _currentUserId() {
+    final candidate = _userProfileStore.userName.trim().toLowerCase();
+    if (candidate.isEmpty) {
+      return 'default';
+    }
+    return candidate.replaceAll(RegExp(r'[^a-z0-9._-]+'), '_');
   }
 
   NotificationCategory _categorize(AppNotification notification) {
@@ -425,10 +409,10 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
 
     _tapWaveController.forward(from: 0);
 
-    var startAccepted = false;
     Object? startError;
     try {
-      startAccepted = await _apiClient.startVoiceAssistant();
+      await _apiClient.startVoiceAssistant();
+      await _apiClient.resetVoiceAssistantReader();
     } catch (error) {
       startError = error;
     }
@@ -437,26 +421,48 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
       final running = await _waitForAssistantRunning();
       if (!mounted) return;
 
-      if (running) {
-        String message = 'AI assistant is running. Speak now.';
-        try {
-          final commandResponse = await _apiClient.sendVoiceAssistantReaderCommand(
-            transcript: 'hey cortex',
+      final transcript = await _captureTranscriptFromMic();
+      debugPrint('AI assistant transcript: ${transcript ?? '<null>'}');
+      if (!mounted) return;
+
+      if (transcript == null || transcript.isEmpty) {
+        if (running) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No speech detected. Please try again.')),
           );
-          final speechText = (commandResponse['speech_text'] ?? '').toString().trim();
-          if (speechText.isNotEmpty) {
-            message = speechText;
-          }
-        } catch (_) {
-          // Keep the default running message if reader command call fails.
+        } else if (startError != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'AI assistant is temporarily unavailable. Please try again.',
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Unable to connect to AI assistant.')),
+          );
         }
+        return;
+      }
 
-        if (!mounted) return;
+      final commandResponse = await _apiClient.sendVoiceAssistantReaderCommand(
+        transcript: transcript,
+      );
+      if (!mounted) return;
 
+      final speechText = (commandResponse['speech_text'] ?? '').toString().trim();
+      if (speechText.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(speechText)));
+      } else {
+        final action = (commandResponse['action'] ?? '').toString().trim();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
+          SnackBar(content: Text(action.isEmpty ? 'Command processed.' : 'AI action: $action')),
         );
-      } else if (startError != null || !startAccepted) {
+      }
+    } catch (_) {
+      if (!mounted) return;
+      if (startError != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -466,18 +472,13 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('AI assistant is idle. Try again.')),
+          const SnackBar(
+            content: Text(
+              'Unable to process voice command. Please try again.',
+            ),
+          ),
         );
       }
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Unable to reach AI assistant right now. Please try again.',
-          ),
-        ),
-      );
     } finally {
       if (mounted) {
         setState(() {
@@ -498,6 +499,41 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
     return false;
   }
 
+  Future<String?> _captureTranscriptFromMic() async {
+    final hasPermission = await _voiceRecorderService.hasPermission();
+    if (!hasPermission) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Microphone permission is required.')),
+        );
+      }
+      return null;
+    }
+
+    final recordingPath = await _voiceRecorderService.startRecording(
+      filePrefix: 'ai-assistant',
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Listening...')),
+      );
+    }
+
+    await Future<void>.delayed(const Duration(seconds: 3));
+    final finalPath = await _voiceRecorderService.stopRecording();
+    final path = finalPath ?? recordingPath;
+    if (path.isEmpty || !await _voiceRecorderService.exists(path)) {
+      return null;
+    }
+
+    final transcript = await _apiClient.transcribeVoiceAssistantFromFile(
+      filePath: path,
+      mimeType: 'audio/mp4',
+    );
+    return transcript?.trim();
+  }
+
   void _openCategory(NotificationCategory category) {
     Navigator.push(
       context,
@@ -505,6 +541,8 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
         builder: (_) => NotificationListScreen(
           category: category,
           notifications: _notificationsByCategory[category]!,
+          userId: _currentUserId(),
+          onReplySent: _loadFromBackend,
         ),
       ),
     );

@@ -1,0 +1,51 @@
+{
+  "notifications": [
+    {
+      "id": "3ee7f0eb-5e33-4e35-a658-862674dd6754",
+      "user_id": "alice",
+      "content": "private alice message 2",
+      "app_name": "Chat",
+      "app_package": "com.chat.app",
+      "sender_name": "Bob",
+      "priority": "MEDIUM",
+      "mode": "Mode 12",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0,
+      "label_reason": "fallback:server_error",
+      "timestamp": "2026-04-05T01:44:28.665Z"
+    },
+    {
+      "id": "d6dc98aa-d2c1-483c-baf7-11bdf663ae08",
+      "user_id": "alice",
+      "content": "private alice message",
+      "app_name": "Chat",
+      "app_package": "com.chat.app",
+      "sender_name": "Bob",
+      "priority": "MEDIUM",
+      "mode": "Mode 12",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0,
+      "label_reason": "fallback:server_error",
+      "timestamp": "2026-04-05T01:43:25.036Z"
+    },
+    {
+      "id": "3193f14c-0685-4e15-b07b-414c1be9fb34",
+      "user_id": "alice",
+      "content": "Need this today",
+      "app_name": "Chat",
+      "app_package": "com.chat.app",
+      "sender_name": "Bob",
+      "priority": "MEDIUM",
+      "mode": "Mode 5",
+      "is_read": false,
+      "is_actioned": false,
+      "confidence": 0,
+      "label_reason": "fallback:server_error",
+      "timestamp": "2026-04-05T01:34:08.177Z"
+    }
+  ],
+  "updated_at": "2026-04-05T01:44:29.259832277Z",
+  "user_id": "alice"
+}

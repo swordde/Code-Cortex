@@ -102,5 +102,25 @@ void main() {
       expect(response['wake_active'], isTrue);
       expect(response['speech_text'], 'I am listening');
     });
+
+    test('resets reader state via reset endpoint', () async {
+      var calls = 0;
+      final mockClient = MockClient((request) async {
+        calls += 1;
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/ai/voice-assistant/reader/reset');
+        expect(request.body, '{}');
+        return http.Response(
+          jsonEncode({'status': 'reset', 'wake_active': false}),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final apiClient = ApiClient(client: mockClient);
+      await apiClient.resetVoiceAssistantReader();
+
+      expect(calls, 1);
+    });
   });
 }

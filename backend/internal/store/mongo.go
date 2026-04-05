@@ -3,7 +3,10 @@ package store
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -16,11 +19,12 @@ import (
 )
 
 type MongoStore struct {
-	client *mongo.Client
-	db     *mongo.Database
+	client               *mongo.Client
+	db                   *mongo.Database
+	notificationsJSONDir string
 }
 
-func NewMongoStore(ctx context.Context, uri, dbName string, timeout time.Duration, insecureTLS bool) (*MongoStore, error) {
+func NewMongoStore(ctx context.Context, uri, dbName string, timeout time.Duration, insecureTLS bool, notificationsJSONDir string) (*MongoStore, error) {
 	client, err := connectMongo(ctx, uri, timeout, insecureTLS)
 	if err != nil && !insecureTLS && strings.HasPrefix(strings.ToLower(uri), "mongodb+srv://") {
 		client, err = connectMongo(ctx, uri, timeout, true)
@@ -28,7 +32,12 @@ func NewMongoStore(ctx context.Context, uri, dbName string, timeout time.Duratio
 	if err != nil {
 		return nil, err
 	}
-	s := &MongoStore{client: client, db: client.Database(dbName)}
+	s := &MongoStore{client: client, db: client.Database(dbName), notificationsJSONDir: notificationsJSONDir}
+	if strings.TrimSpace(s.notificationsJSONDir) != "" {
+		if err := os.MkdirAll(s.notificationsJSONDir, 0o755); err != nil {
+			return nil, err
+		}
+	}
 	if err := s.ensureSeeds(ctx); err != nil {
 		return nil, err
 	}
@@ -111,12 +120,24 @@ func (s *MongoStore) ensureSeeds(ctx context.Context) error {
 }
 
 func (s *MongoStore) SaveNotification(ctx context.Context, n *models.Notification) error {
+	n.UserID = normalizeUserID(n.UserID)
 	_, err := s.col("notifications").InsertOne(ctx, n)
-	return err
+	if err != nil {
+		return err
+	}
+	return s.syncUserNotificationsJSON(ctx, n.UserID)
 }
 
 func (s *MongoStore) ListNotifications(ctx context.Context) ([]models.Notification, error) {
-	cur, err := s.col("notifications").Find(ctx, bson.M{"deleted": bson.M{"$ne": true}})
+	return s.listNotificationsByFilter(ctx, bson.M{"deleted": bson.M{"$ne": true}})
+}
+
+func (s *MongoStore) ListNotificationsByUser(ctx context.Context, userID string) ([]models.Notification, error) {
+	return s.listNotificationsByFilter(ctx, bson.M{"deleted": bson.M{"$ne": true}, "user_id": normalizeUserID(userID)})
+}
+
+func (s *MongoStore) listNotificationsByFilter(ctx context.Context, filter bson.M) ([]models.Notification, error) {
+	cur, err := s.col("notifications").Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -149,6 +170,10 @@ func (s *MongoStore) GetNotification(ctx context.Context, id string) (*models.No
 }
 
 func (s *MongoStore) MarkRead(ctx context.Context, id string) error {
+	userID, err := s.getNotificationUserID(ctx, id)
+	if err != nil {
+		return err
+	}
 	res, err := s.col("notifications").UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": bson.M{"is_read": true}})
 	if err != nil {
 		return err
@@ -156,10 +181,14 @@ func (s *MongoStore) MarkRead(ctx context.Context, id string) error {
 	if res.MatchedCount == 0 {
 		return mongo.ErrNoDocuments
 	}
-	return nil
+	return s.syncUserNotificationsJSON(ctx, userID)
 }
 
 func (s *MongoStore) MarkActioned(ctx context.Context, id string) error {
+	userID, err := s.getNotificationUserID(ctx, id)
+	if err != nil {
+		return err
+	}
 	res, err := s.col("notifications").UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": bson.M{"is_actioned": true}})
 	if err != nil {
 		return err
@@ -167,10 +196,14 @@ func (s *MongoStore) MarkActioned(ctx context.Context, id string) error {
 	if res.MatchedCount == 0 {
 		return mongo.ErrNoDocuments
 	}
-	return nil
+	return s.syncUserNotificationsJSON(ctx, userID)
 }
 
 func (s *MongoStore) SoftDeleteNotification(ctx context.Context, id string) error {
+	userID, err := s.getNotificationUserID(ctx, id)
+	if err != nil {
+		return err
+	}
 	res, err := s.col("notifications").UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": bson.M{"deleted": true}})
 	if err != nil {
 		return err
@@ -178,7 +211,64 @@ func (s *MongoStore) SoftDeleteNotification(ctx context.Context, id string) erro
 	if res.MatchedCount == 0 {
 		return mongo.ErrNoDocuments
 	}
-	return nil
+	return s.syncUserNotificationsJSON(ctx, userID)
+}
+
+func normalizeUserID(userID string) string {
+	cleaned := strings.TrimSpace(userID)
+	if cleaned == "" {
+		return "default"
+	}
+	cleaned = strings.ToLower(cleaned)
+	replacer := strings.NewReplacer("/", "_", "\\", "_", " ", "_", ":", "_", "*", "_", "?", "_", "\"", "_", "<", "_", ">", "_", "|", "_")
+	return replacer.Replace(cleaned)
+}
+
+func (s *MongoStore) getNotificationUserID(ctx context.Context, id string) (string, error) {
+	var n struct {
+		UserID string `bson:"user_id"`
+	}
+	err := s.col("notifications").FindOne(ctx, bson.M{"_id": id}).Decode(&n)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return "", mongo.ErrNoDocuments
+	}
+	if err != nil {
+		return "", err
+	}
+	return normalizeUserID(n.UserID), nil
+}
+
+func (s *MongoStore) syncUserNotificationsJSON(ctx context.Context, userID string) error {
+	if strings.TrimSpace(s.notificationsJSONDir) == "" {
+		return nil
+	}
+
+	normalizedUserID := normalizeUserID(userID)
+	items, err := s.ListNotificationsByUser(ctx, normalizedUserID)
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(s.notificationsJSONDir, 0o755); err != nil {
+		return err
+	}
+
+	target := filepath.Join(s.notificationsJSONDir, normalizedUserID+".json")
+	tmp := target + ".tmp"
+
+	body, err := json.MarshalIndent(map[string]any{
+		"user_id":       normalizedUserID,
+		"notifications": items,
+		"updated_at":    time.Now().UTC().Format(time.RFC3339Nano),
+	}, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(tmp, body, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, target)
 }
 
 func (s *MongoStore) ListModes(ctx context.Context) ([]models.Mode, error) {
