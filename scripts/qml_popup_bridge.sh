@@ -15,10 +15,78 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! command -v jq >/dev/null 2>&1; then
-  echo "qml_popup_bridge.sh: jq is required (install with your package manager)" >&2
+JSON_PARSER=""
+if command -v jq >/dev/null 2>&1; then
+  JSON_PARSER="jq"
+elif command -v python3 >/dev/null 2>&1; then
+  JSON_PARSER="python3"
+else
+  echo "qml_popup_bridge.sh: requires either jq or python3" >&2
   exit 1
 fi
+
+json_is_array() {
+  local input="$1"
+  if [[ "$JSON_PARSER" == "jq" ]]; then
+    printf '%s' "$input" | jq -e 'type == "array"' >/dev/null 2>&1
+    return $?
+  fi
+
+  printf '%s' "$input" | python3 -c '
+import json
+import sys
+
+try:
+    data = json.loads(sys.stdin.read())
+    raise SystemExit(0 if isinstance(data, list) else 1)
+except Exception:
+    raise SystemExit(1)
+'
+}
+
+json_to_rows() {
+  local input="$1"
+  if [[ "$JSON_PARSER" == "jq" ]]; then
+    printf '%s' "$input" | jq -r '.[] | [
+      (.id // ""),
+      (.sender_name // "Unknown"),
+      (.app_name // .app_package // "System"),
+      (.content // ""),
+      ((.priority // "LOW") | ascii_upcase),
+      (.timestamp // "")
+    ] | @tsv'
+    return $?
+  fi
+
+  printf '%s' "$input" | python3 -c '
+import json
+import sys
+
+def clean(value):
+    if value is None:
+        return ""
+    text = str(value)
+    return text.replace("\t", " ").replace("\n", " ").replace("\r", " ")
+
+try:
+    rows = json.loads(sys.stdin.read())
+    if not isinstance(rows, list):
+        raise SystemExit(0)
+
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        rid = clean(row.get("id", ""))
+        sender = clean(row.get("sender_name", "Unknown")) or "Unknown"
+        app = clean(row.get("app_name", "") or row.get("app_package", "") or "System") or "System"
+        preview = clean(row.get("content", ""))
+        priority = clean((row.get("priority", "LOW") or "LOW")).upper() or "LOW"
+        ts = clean(row.get("timestamp", ""))
+        print("\t".join([rid, sender, app, preview, priority, ts]))
+except Exception:
+    pass
+    '
+}
 
 find_qml_cmd() {
   for c in qml6 qmlscene6 qmlscene qml; do
@@ -72,21 +140,12 @@ while true; do
     continue
   fi
 
-  if ! printf '%s' "$json" | jq -e 'type == "array"' >/dev/null 2>&1; then
+  if ! json_is_array "$json"; then
     sleep "$POLL_INTERVAL"
     continue
   fi
 
-  mapfile -t rows < <(
-    printf '%s' "$json" | jq -r '.[] | [
-      (.id // ""),
-      (.sender_name // "Unknown"),
-      (.app_name // .app_package // "System"),
-      (.content // ""),
-      ((.priority // "LOW") | ascii_upcase),
-      (.timestamp // "")
-    ] | @tsv'
-  )
+  mapfile -t rows < <(json_to_rows "$json")
 
   declare -A latest_ids=()
   new_rows=()

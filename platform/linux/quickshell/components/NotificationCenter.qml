@@ -16,6 +16,8 @@ Rectangle {
     property var filteredNotifications: []
     property var selectedNotification: null
 
+    signal replyRequested(string notificationId)
+
     width: expanded ? Math.max(300, Math.min(420, hostWidth * 0.28)) : 0
     color: PopupTheme.panelBackground(stylePreset)
     border.color: PopupTheme.panelBorder(stylePreset)
@@ -204,6 +206,70 @@ Rectangle {
                 wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                 color: PopupTheme.bodyColor(notificationCenter.stylePreset)
                 font.pixelSize: 12
+            }
+        }
+
+        RowLayout {
+            visible: notificationCenter.selectedNotification !== null
+                && (notificationCenter.selectedNotification.id || "").length > 0
+            Layout.fillWidth: true
+            spacing: 8
+
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 34
+                radius: 10
+                color: PopupTheme.countColorByPriority(notificationCenter.stylePreset, "MEDIUM")
+                border.color: PopupTheme.buttonBorder(notificationCenter.stylePreset)
+                border.width: 1
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "Reply"
+                    color: "#FFFFFF"
+                    font.pixelSize: 12
+                    font.bold: true
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: notificationCenter.replyRequested(notificationCenter.selectedNotification.id)
+                }
+            }
+        }
+
+        Rectangle {
+            visible: notificationCenter.selectedNotification !== null
+                && ((notificationCenter.selectedNotification.generatedReply || "").length > 0)
+            Layout.fillWidth: true
+            Layout.preferredHeight: Math.min(132, generatedReplyText.implicitHeight + 24)
+            radius: 10
+            color: PopupTheme.panelBackground(notificationCenter.stylePreset)
+            border.color: PopupTheme.buttonBorder(notificationCenter.stylePreset)
+            border.width: 1
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 10
+                spacing: 6
+
+                Text {
+                    text: "Generated reply"
+                    color: PopupTheme.titleColor(notificationCenter.stylePreset)
+                    font.pixelSize: 12
+                    font.bold: true
+                }
+
+                Text {
+                    id: generatedReplyText
+                    Layout.fillWidth: true
+                    text: notificationCenter.selectedNotification
+                        ? (notificationCenter.selectedNotification.generatedReply || "")
+                        : ""
+                    wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                    color: PopupTheme.bodyColor(notificationCenter.stylePreset)
+                    font.pixelSize: 12
+                }
             }
         }
 

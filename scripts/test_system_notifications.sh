@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BACKEND_HOST="${BACKEND_HOST:-10.142.59.129}"
+BACKEND_HOST="${BACKEND_HOST:-localhost}"
 BACKEND_PORT="${BACKEND_PORT:-8080}"
 
 payload='{"content":"SNP bridge test from QuickShell","app_name":"SNP","app_package":"com.snp.test","sender_name":"Code Cortex"}'

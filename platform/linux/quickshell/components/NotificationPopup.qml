@@ -11,9 +11,11 @@ Rectangle {
     property string preview: "Notification preview"
     property string priority: "LOW"
     property string timestamp: "now"
+    property string notificationId: ""
     property string stylePreset: "densePro"
 
     signal dismissed
+    signal replyRequested(string notificationId)
 
     width: 360
     height: contentColumn.implicitHeight + 20
@@ -66,6 +68,7 @@ Rectangle {
         ActionBar {
             Layout.fillWidth: true
             stylePreset: notificationPopup.stylePreset
+            onReplyClicked: notificationPopup.replyRequested(notificationPopup.notificationId)
             onDismissClicked: notificationPopup.dismissed()
         }
     }

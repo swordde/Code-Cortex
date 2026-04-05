@@ -31,6 +31,18 @@ send_to_backend() {
   local body="$3"
   local priority="$4"
 
+  # Normalize browser-origin web app notifications so WhatsApp triggers reliably.
+  local merged_lc
+  merged_lc="$(printf '%s %s %s' "$app" "$summary" "$body" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$merged_lc" == *"whatsapp"* ]]; then
+    app="WhatsApp Web"
+    if [[ "$priority" != "EMERGENCY" ]]; then
+      priority="HIGH"
+    fi
+  elif [[ "$merged_lc" == *"discord"* ]]; then
+    app="Discord Web"
+  fi
+
   if [[ -n "$IGNORE_APPS_REGEX" ]] && [[ "$app" =~ $IGNORE_APPS_REGEX ]]; then
     return
   fi

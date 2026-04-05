@@ -58,6 +58,11 @@ ApplicationWindow {
     property var seenNotificationIds: ({})
     property bool notificationsPrimed: false
 
+    TextEdit {
+        id: clipboardBuffer
+        visible: false
+    }
+
     property int emergencyCount: countHistoryPriority("EMERGENCY")
     property int highCount: countHistoryPriority("HIGH")
     property int mediumCount: countHistoryPriority("MEDIUM")
@@ -285,6 +290,9 @@ ApplicationWindow {
         expanded: true
         stylePreset: root.popupPreset
         hostWidth: root.width
+        onReplyRequested: (notificationId) => {
+            root.generateReplyCopyAndOpenWhatsApp(notificationId)
+        }
     }
 
     DashboardOverview {
@@ -456,7 +464,12 @@ ApplicationWindow {
         preview: root.activePopup ? root.activePopup.preview : ""
         priority: root.activePopup ? root.activePopup.priority : "LOW"
         timestamp: root.activePopup ? root.activePopup.timestamp : ""
+        notificationId: root.activePopup ? (root.activePopup.id || "") : ""
         stylePreset: root.popupPreset
+
+        onReplyRequested: (notificationId) => {
+            root.generateReplyCopyAndOpenWhatsApp(notificationId)
+        }
 
         onDismissed: {
             popupTimer.stop()
@@ -506,7 +519,12 @@ ApplicationWindow {
             preview: root.activePopup ? root.activePopup.preview : ""
             priority: root.activePopup ? root.activePopup.priority : "LOW"
             timestamp: root.activePopup ? root.activePopup.timestamp : ""
+            notificationId: root.activePopup ? (root.activePopup.id || "") : ""
             stylePreset: root.popupPreset
+
+            onReplyRequested: (notificationId) => {
+                root.generateReplyCopyAndOpenWhatsApp(notificationId)
+            }
 
             onDismissed: {
                 popupTimer.stop()
@@ -589,8 +607,81 @@ ApplicationWindow {
             app: n.app_name || n.app_package || "System",
             preview: n.content || "",
             priority: (n.priority || "LOW").toUpperCase(),
-            timestamp: when
+            timestamp: when,
+            generatedReply: ""
         }
+    }
+
+    function updateGeneratedReplyInHistory(notificationId, replyText) {
+        if (!notificationId || notificationId.length === 0) {
+            return
+        }
+
+        var updated = []
+        for (var i = 0; i < notificationHistory.length; i++) {
+            var row = notificationHistory[i]
+            if ((row.id || "") === notificationId) {
+                row.generatedReply = replyText
+            }
+            updated.push(row)
+        }
+        notificationHistory = updated
+
+        if (centerPanel.selectedNotification && (centerPanel.selectedNotification.id || "") === notificationId) {
+            centerPanel.selectedNotification.generatedReply = replyText
+        }
+    }
+
+    function copyTextToClipboard(text) {
+        if (!text || text.length === 0) {
+            return
+        }
+        clipboardBuffer.text = text
+        clipboardBuffer.selectAll()
+        clipboardBuffer.copy()
+        clipboardBuffer.deselect()
+    }
+
+    function openWhatsAppWithText(text) {
+        if (!text || text.length === 0) {
+            Qt.openUrlExternally("https://web.whatsapp.com")
+            return
+        }
+
+        var target = "https://web.whatsapp.com/send?text=" + encodeURIComponent(text)
+        Qt.openUrlExternally(target)
+    }
+
+    function generateReplyCopyAndOpenWhatsApp(notificationId) {
+        if (!notificationId || notificationId.length === 0) {
+            var quickFallback = ""
+            if (activePopup && activePopup.preview) {
+                quickFallback = String(activePopup.preview)
+            }
+            if (quickFallback.length > 0) {
+                copyTextToClipboard(quickFallback)
+                openWhatsAppWithText(quickFallback)
+            }
+            return
+        }
+
+        backendRequest("POST", "/api/notifications/" + notificationId + "/reply", null, function(res) {
+            var replyText = ""
+            if (res && res.reply) {
+                replyText = String(res.reply)
+            }
+
+            if (replyText.length === 0) {
+                replyText = "Cortex could not generate a reply for this notification."
+            }
+
+            updateGeneratedReplyInHistory(notificationId, replyText)
+            copyTextToClipboard(replyText)
+            openWhatsAppWithText(replyText)
+        }, function(status) {
+            var fallback = "Failed to generate Cortex reply (" + status + ")."
+            updateGeneratedReplyInHistory(notificationId, fallback)
+        })
     }
 
     function syncBackendState() {

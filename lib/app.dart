@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'screens/landing_screen.dart';
+import 'screens/startup_name_gate_screen.dart';
 
 class CortexApp extends StatelessWidget {
   const CortexApp({super.key});
@@ -23,7 +23,7 @@ class CortexApp extends StatelessWidget {
         useMaterial3: true,
       ),
       themeMode: ThemeMode.system,
-      home: const LandingScreen(),
+      home: const StartupNameGateScreen(),
     );
   }
 }

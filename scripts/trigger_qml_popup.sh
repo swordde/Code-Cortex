@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BACKEND_HOST="${BACKEND_HOST:-10.142.59.129}"
+BACKEND_HOST="${BACKEND_HOST:-localhost}"
 BACKEND_PORT="${BACKEND_PORT:-8080}"
 
 PRIORITY="${1:-HIGH}"

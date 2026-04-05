@@ -31,7 +31,7 @@ Server defaults to `:8080`.
 - `SNP_PORT` (default `:8080`)
 - `SNP_MONGO_URI` (default `mongodb://localhost:27017`)
 - `SNP_MONGO_DB` (default `snp`)
-- `SNP_AI_URL` (default `http://localhost:5000`)
+- `SNP_AI_URL` (default `https://marisela-tiderode-mollifyingly.ngrok-free.dev`)
 - `SNP_SOCKET_PATH` (default `/tmp/snp.sock`)
 - `SNP_AVATAR_DIR` (default `./avatars`)
 
