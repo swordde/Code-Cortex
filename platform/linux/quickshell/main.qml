@@ -19,7 +19,7 @@ ApplicationWindow {
     // Presets: projectCore, batNoir, densePro, cleanGlass, neonGamer
     property string popupPreset: "projectCore"
     readonly property var availablePresets: ["projectCore", "batNoir", "densePro", "cleanGlass", "neonGamer"]
-    property int popupDurationMs: 5000
+    property int popupDurationMs: popupOnlyMode ? 12000 : 5000
     property bool popupOnlyMode: isPopupOnlyMode()
     property bool popupOnceMode: argumentValue("--popup-once", "0") === "1"
     property bool demoMode: isDemoMode()
@@ -216,6 +216,8 @@ ApplicationWindow {
                 x = Screen.width - width - 20
                 y = Screen.height - height - 20
             }
+            root.raise()
+            root.requestActivate()
         }
 
         if (demoMode) {
@@ -976,6 +978,8 @@ ApplicationWindow {
                 x = Screen.width - width - 20
                 y = Screen.height - height - 20
             }
+            root.raise()
+            root.requestActivate()
         }
 
         popupTimer.restart()
