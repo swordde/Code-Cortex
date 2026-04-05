@@ -103,6 +103,8 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("POST /api/ai/voice-assistant/start", a.handleAIVoiceAssistantStart)
 	mux.HandleFunc("POST /api/ai/voice-assistant/stop", a.handleAIVoiceAssistantStop)
 	mux.HandleFunc("GET /api/ai/voice-assistant/status", a.handleAIVoiceAssistantStatus)
+	mux.HandleFunc("POST /api/ai/voice-assistant/transcribe", a.handleAIVoiceAssistantTranscribe)
+	mux.HandleFunc("POST /api/ai/voice-assistant/reader/command", a.handleAIVoiceAssistantReaderCommand)
 	mux.HandleFunc("GET /api/profile", a.handleGetProfile)
 	mux.HandleFunc("PUT /api/profile", a.handleUpdateProfile)
 	mux.HandleFunc("POST /api/profile/avatar", a.handleUploadAvatar)
@@ -716,6 +718,14 @@ func (a *API) handleAIVoiceAssistantStop(w http.ResponseWriter, r *http.Request)
 
 func (a *API) handleAIVoiceAssistantStatus(w http.ResponseWriter, r *http.Request) {
 	a.handleAIProxy(w, r, http.MethodGet, "/voice-assistant/status")
+}
+
+func (a *API) handleAIVoiceAssistantTranscribe(w http.ResponseWriter, r *http.Request) {
+	a.handleAIProxy(w, r, http.MethodPost, "/voice-assistant/transcribe")
+}
+
+func (a *API) handleAIVoiceAssistantReaderCommand(w http.ResponseWriter, r *http.Request) {
+	a.handleAIProxy(w, r, http.MethodPost, "/voice-assistant/reader/command")
 }
 
 func (a *API) handleAIProxy(w http.ResponseWriter, r *http.Request, method, path string) {
