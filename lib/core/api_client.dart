@@ -100,6 +100,82 @@ class ApiClient {
     _ensureSuccess(response, 'Voice enroll failed');
   }
 
+  Future<bool> startVoiceAssistant() async {
+    http.Response? lastResponse;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      final response = await _post(
+        BackendEndpoints.aiVoiceAssistantStartUri,
+        headers: {'Content-Type': 'application/json'},
+        body: '{}',
+      );
+
+      if (response.statusCode >= 200 && response.statusCode <= 299) {
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map<String, dynamic>) {
+            final running = decoded['running'];
+            if (running is bool) {
+              return running;
+            }
+            if (decoded['ok'] == false || decoded.containsKey('warning')) {
+              return false;
+            }
+          }
+        } catch (_) {
+          // Non-JSON success response, consider start accepted.
+        }
+        return true;
+      }
+
+      lastResponse = response;
+      final shouldRetry = response.statusCode >= 500 && attempt == 0;
+      if (shouldRetry) {
+        await Future<void>.delayed(const Duration(milliseconds: 700));
+        continue;
+      }
+      break;
+    }
+
+    _ensureSuccess(lastResponse!, 'Failed to start AI assistant');
+    return false;
+  }
+
+  Future<bool> isVoiceAssistantRunning() async {
+    final response = await _get(BackendEndpoints.aiVoiceAssistantStatusUri);
+    _ensureSuccess(response, 'Failed to fetch AI assistant status');
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Invalid AI assistant status response');
+    }
+    return decoded['running'] == true;
+  }
+
+  Future<String?> transcribeVoiceAssistant({
+    required String audioBase64,
+    String mimeType = 'audio/webm',
+  }) async {
+    final response = await _post(
+      BackendEndpoints.aiVoiceAssistantTranscribeUri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'audio_base64': audioBase64,
+        'mime_type': mimeType,
+      }),
+    );
+    _ensureSuccess(response, 'Failed to transcribe audio');
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      return null;
+    }
+    final transcript = decoded['transcript'];
+    if (transcript is String && transcript.trim().isNotEmpty) {
+      return transcript;
+    }
+    return null;
+  }
+
   Future<List<BackendMode>> fetchModes() async {
     final response = await _get(BackendEndpoints.modesUri);
     _ensureSuccess(response, 'Failed to load modes');

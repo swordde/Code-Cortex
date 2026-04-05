@@ -83,4 +83,13 @@ class BackendEndpoints {
     static Uri get profileUri => Uri.parse('http://$host:$port/api/profile');
 
   static Uri get websocketUri => Uri.parse('ws://$host:$port/ws');
+
+      static Uri get aiVoiceAssistantStartUri =>
+        Uri.parse('http://$host:$port/api/ai/voice-assistant/start');
+
+    static Uri get aiVoiceAssistantStatusUri =>
+        Uri.parse('http://$host:$port/api/ai/voice-assistant/status');
+
+    static Uri get aiVoiceAssistantTranscribeUri =>
+        Uri.parse('http://$host:$port/api/ai/voice-assistant/transcribe');
 }

@@ -709,7 +709,42 @@ func (a *API) handleAICortexStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleAIVoiceAssistantStart(w http.ResponseWriter, r *http.Request) {
-	a.handleAIProxy(w, r, http.MethodPost, "/voice-assistant/start")
+	body, status, proxyErr := a.aiProxy.ProxyToAI(r.Context(), http.MethodPost, "/voice-assistant/start", nil)
+	if proxyErr == nil && status >= 200 && status < 300 {
+		writeRawJSON(w, status, body)
+		return
+	}
+
+	statusBody, statusCode, statusErr := a.aiProxy.ProxyToAI(r.Context(), http.MethodGet, "/voice-assistant/status", nil)
+	if statusErr == nil && statusCode >= 200 && statusCode < 300 {
+		var statusPayload map[string]any
+		if err := json.Unmarshal(statusBody, &statusPayload); err == nil {
+			running, _ := statusPayload["running"].(bool)
+			if running {
+				writeJSON(w, http.StatusOK, map[string]any{
+					"ok":      true,
+					"running": true,
+					"started": false,
+				})
+				return
+			}
+
+			writeJSON(w, http.StatusAccepted, map[string]any{
+				"ok":      false,
+				"running": false,
+				"started": false,
+				"warning": "voice assistant start unavailable upstream",
+			})
+			return
+		}
+	}
+
+	if proxyErr != nil {
+		writeError(w, http.StatusServiceUnavailable, "AI service unavailable", "AI_UNREACHABLE")
+		return
+	}
+
+	writeRawJSON(w, status, body)
 }
 
 func (a *API) handleAIVoiceAssistantStop(w http.ResponseWriter, r *http.Request) {

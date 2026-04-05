@@ -31,6 +31,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
   StreamSubscription<AndroidNotificationEvent>? _nativeNotificationSubscription;
   Timer? _pollTimer;
   int? _baselineTotal;
+  bool _isAssistantStarting = false;
 
   final Map<NotificationCategory, List<AppNotification>>
   _notificationsByCategory = {
@@ -409,15 +410,77 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: AiOrbFab(
-        onTap: () {
-          _tapWaveController.forward(from: 0);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('AI assistant quick action')),
-          );
-        },
+        onTap: () => unawaited(_handleAiAssistantTap()),
       ),
       bottomNavigationBar: SizedBox(height: isDark ? 20 : 14),
     );
+  }
+
+  Future<void> _handleAiAssistantTap() async {
+    if (_isAssistantStarting) return;
+
+    setState(() {
+      _isAssistantStarting = true;
+    });
+
+    _tapWaveController.forward(from: 0);
+
+    var startAccepted = false;
+    Object? startError;
+    try {
+      startAccepted = await _apiClient.startVoiceAssistant();
+    } catch (error) {
+      startError = error;
+    }
+
+    try {
+      final running = await _waitForAssistantRunning();
+      if (!mounted) return;
+
+      if (running) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('AI assistant is running. Speak now.')),
+        );
+      } else if (startError != null || !startAccepted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'AI assistant is temporarily unavailable. Please try again.',
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('AI assistant is idle. Try again.')),
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to reach AI assistant right now. Please try again.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAssistantStarting = false;
+        });
+      }
+    }
+  }
+
+  Future<bool> _waitForAssistantRunning() async {
+    for (var attempt = 0; attempt < 4; attempt++) {
+      final running = await _apiClient.isVoiceAssistantRunning();
+      if (running) return true;
+      if (attempt < 3) {
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+      }
+    }
+    return false;
   }
 
   void _openCategory(NotificationCategory category) {
