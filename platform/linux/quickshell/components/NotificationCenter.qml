@@ -14,6 +14,7 @@ Rectangle {
     property string searchQuery: ""
     property string selectedPriority: "ALL"
     property var filteredNotifications: []
+    property var selectedNotification: null
 
     width: expanded ? Math.max(300, Math.min(420, hostWidth * 0.28)) : 0
     color: PopupTheme.panelBackground(stylePreset)
@@ -124,6 +125,7 @@ Rectangle {
         }
 
         ListView {
+            id: notificationsList
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 8
@@ -134,25 +136,30 @@ Rectangle {
                 required property var modelData
 
                 width: ListView.view.width
-                height: 78
+                implicitHeight: Math.max(78, cardColumn.implicitHeight + 20)
                 radius: 10
                 color: PopupTheme.cardSurfaceBackground(notificationCenter.stylePreset, modelData.priority)
                 border.color: PopupTheme.cardSurfaceBorder(notificationCenter.stylePreset, modelData.priority)
                 border.width: 1
 
                 Column {
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    spacing: 4
+                    id: cardColumn
+                    x: 10
+                    y: 10
+                    width: parent.width - 20
+                    spacing: 6
 
-                    Row {
+                    RowLayout {
+                        width: parent.width
                         spacing: 8
 
                         Text {
                             text: modelData.sender
+                            Layout.fillWidth: true
                             color: PopupTheme.titleColor(notificationCenter.stylePreset)
                             font.pixelSize: 13
                             font.bold: true
+                            elide: Text.ElideRight
                         }
 
                         PriorityBadge {
@@ -165,10 +172,38 @@ Rectangle {
                         text: modelData.preview
                         color: PopupTheme.bodyColor(notificationCenter.stylePreset)
                         font.pixelSize: 12
-                        elide: Text.ElideRight
+                        wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                        elide: Text.ElideNone
                         width: parent.width
                     }
                 }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: notificationCenter.selectedNotification = modelData
+                }
+            }
+        }
+
+        Rectangle {
+            visible: notificationCenter.selectedNotification !== null
+            Layout.fillWidth: true
+            Layout.preferredHeight: Math.min(120, fullMessage.implicitHeight + 20)
+            radius: 10
+            color: PopupTheme.buttonBackground(notificationCenter.stylePreset)
+            border.color: PopupTheme.buttonBorder(notificationCenter.stylePreset)
+            border.width: 1
+
+            Text {
+                id: fullMessage
+                anchors.fill: parent
+                anchors.margins: 10
+                text: notificationCenter.selectedNotification
+                    ? ((notificationCenter.selectedNotification.sender || "Unknown") + ": " + (notificationCenter.selectedNotification.preview || ""))
+                    : ""
+                wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                color: PopupTheme.bodyColor(notificationCenter.stylePreset)
+                font.pixelSize: 12
             }
         }
 
@@ -177,6 +212,20 @@ Rectangle {
             text: "No notifications match current filters"
             color: PopupTheme.subtitleColor(notificationCenter.stylePreset)
             font.pixelSize: 12
+        }
+
+        Connections {
+            target: notificationCenter
+
+            function onFilteredNotificationsChanged() {
+                if (notificationCenter.filteredNotifications.length === 0) {
+                    notificationCenter.selectedNotification = null
+                    return
+                }
+                if (!notificationCenter.selectedNotification) {
+                    notificationCenter.selectedNotification = notificationCenter.filteredNotifications[0]
+                }
+            }
         }
     }
 }
