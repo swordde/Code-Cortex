@@ -438,8 +438,23 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
       if (!mounted) return;
 
       if (running) {
+        String message = 'AI assistant is running. Speak now.';
+        try {
+          final commandResponse = await _apiClient.sendVoiceAssistantReaderCommand(
+            transcript: 'hey cortex',
+          );
+          final speechText = (commandResponse['speech_text'] ?? '').toString().trim();
+          if (speechText.isNotEmpty) {
+            message = speechText;
+          }
+        } catch (_) {
+          // Keep the default running message if reader command call fails.
+        }
+
+        if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('AI assistant is running. Speak now.')),
+          SnackBar(content: Text(message)),
         );
       } else if (startError != null || !startAccepted) {
         ScaffoldMessenger.of(context).showSnackBar(

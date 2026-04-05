@@ -176,6 +176,23 @@ class ApiClient {
     return null;
   }
 
+  Future<Map<String, dynamic>> sendVoiceAssistantReaderCommand({
+    required String transcript,
+  }) async {
+    final response = await _post(
+      BackendEndpoints.aiVoiceAssistantReaderCommandUri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'transcript': transcript}),
+    );
+    _ensureSuccess(response, 'Failed to send reader command');
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Invalid reader command response');
+    }
+    return decoded;
+  }
+
   Future<List<BackendMode>> fetchModes() async {
     final response = await _get(BackendEndpoints.modesUri);
     _ensureSuccess(response, 'Failed to load modes');

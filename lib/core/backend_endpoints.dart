@@ -92,4 +92,7 @@ class BackendEndpoints {
 
     static Uri get aiVoiceAssistantTranscribeUri =>
         Uri.parse('http://$host:$port/api/ai/voice-assistant/transcribe');
+
+    static Uri get aiVoiceAssistantReaderCommandUri =>
+      Uri.parse('http://$host:$port/api/ai/voice-assistant/reader/command');
 }
