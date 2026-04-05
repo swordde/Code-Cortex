@@ -23,8 +23,8 @@ func (s *VoiceAssistantRuntimeService) Start(ctx context.Context) {
 	startupCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
-	if err := s.startAndVerify(startupCtx); err != nil {
-		log.Printf("voice assistant warning: startup init failed: %v", err)
+	if err := s.startAndVerifyWithRetry(startupCtx, 3); err != nil {
+		log.Printf("voice assistant warning: startup init failed after retries: %v", err)
 	} else {
 		log.Printf("voice assistant runtime ready")
 	}
@@ -41,11 +41,47 @@ func (s *VoiceAssistantRuntimeService) Start(ctx context.Context) {
 				if err := s.verifyStatus(checkCtx); err != nil {
 					s.ready.Store(false)
 					log.Printf("voice assistant warning: status check failed: %v", err)
+
+					recoverCtx, recoverCancel := context.WithTimeout(context.Background(), 10*time.Second)
+					if recoverErr := s.startAndVerifyWithRetry(recoverCtx, 2); recoverErr != nil {
+						log.Printf("voice assistant warning: recovery attempt failed: %v", recoverErr)
+					} else {
+						log.Printf("voice assistant runtime recovered")
+					}
+					recoverCancel()
 				}
 				cancel()
 			}
 		}
 	}()
+}
+
+func (s *VoiceAssistantRuntimeService) startAndVerifyWithRetry(ctx context.Context, maxAttempts int) error {
+	if maxAttempts < 1 {
+		maxAttempts = 1
+	}
+
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if err := s.startAndVerify(ctx); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+
+		if attempt == maxAttempts {
+			break
+		}
+
+		backoff := time.Duration(attempt) * time.Second
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(backoff):
+		}
+	}
+
+	return lastErr
 }
 
 func (s *VoiceAssistantRuntimeService) IsReady() bool {
@@ -58,6 +94,9 @@ func (s *VoiceAssistantRuntimeService) startAndVerify(ctx context.Context) error
 		return err
 	}
 	if status < 200 || status >= 300 {
+		if verifyErr := s.verifyStatus(ctx); verifyErr == nil {
+			return nil
+		}
 		return fmt.Errorf("start returned status %d: %s", status, string(body))
 	}
 	return s.verifyStatus(ctx)

@@ -721,7 +721,33 @@ func (a *API) handleAIVoiceAssistantStatus(w http.ResponseWriter, r *http.Reques
 }
 
 func (a *API) handleAIVoiceAssistantTranscribe(w http.ResponseWriter, r *http.Request) {
-	a.handleAIProxy(w, r, http.MethodPost, "/voice-assistant/transcribe")
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body", "VALIDATION_ERROR")
+		return
+	}
+
+	if len(data) > 0 {
+		var payload map[string]any
+		if err := json.Unmarshal(data, &payload); err == nil {
+			if _, hasBase64 := payload["audio_base64"]; !hasBase64 {
+				if audio, hasAudio := payload["audio"]; hasAudio {
+					payload["audio_base64"] = audio
+					delete(payload, "audio")
+					if rewritten, marshalErr := json.Marshal(payload); marshalErr == nil {
+						data = rewritten
+					}
+				}
+			}
+		}
+	}
+
+	respBody, status, proxyErr := a.aiProxy.ProxyToAI(r.Context(), http.MethodPost, "/voice-assistant/transcribe", data)
+	if proxyErr != nil {
+		writeError(w, http.StatusServiceUnavailable, "AI service unavailable", "AI_UNREACHABLE")
+		return
+	}
+	writeRawJSON(w, status, respBody)
 }
 
 func (a *API) handleAIVoiceAssistantReaderCommand(w http.ResponseWriter, r *http.Request) {
