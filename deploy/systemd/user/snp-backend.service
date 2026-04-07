@@ -1,5 +1,5 @@
 [Unit]
-Description=SNP Go Backend (User Service)
+Description=Cortex Go Backend (User Service)
 After=network-online.target
 Wants=network-online.target
 

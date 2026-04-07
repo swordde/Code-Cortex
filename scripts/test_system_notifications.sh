@@ -4,7 +4,7 @@ set -euo pipefail
 BACKEND_HOST="${BACKEND_HOST:-localhost}"
 BACKEND_PORT="${BACKEND_PORT:-8080}"
 
-payload='{"content":"SNP bridge test from QuickShell","app_name":"SNP","app_package":"com.snp.test","sender_name":"Code Cortex"}'
+payload='{"content":"Cortex bridge test from QuickShell","app_name":"Cortex","app_package":"com.snp.test","sender_name":"Cortex"}'
 
 curl -sS -m 5 -X POST "http://${BACKEND_HOST}:${BACKEND_PORT}/api/notifications/ingest" \
   -H 'Content-Type: application/json' \

@@ -6,7 +6,7 @@ BACKEND_PORT="${BACKEND_PORT:-8080}"
 
 PRIORITY="${1:-HIGH}"
 SENDER="${2:-Popup Tester}"
-APP_NAME="${3:-SNP Test}" 
+APP_NAME="${3:-Cortex Test}"
 CONTENT="${4:-QuickShell QML popup trigger}"
 
 PRIORITY_UPPER="$(printf '%s' "$PRIORITY" | tr '[:lower:]' '[:upper:]')"

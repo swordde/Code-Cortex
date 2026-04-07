@@ -11,7 +11,7 @@ ApplicationWindow {
     visible: true
     width: popupOnlyMode ? 420 : 1280
     height: popupOnlyMode ? 220 : 760
-    title: popupOnlyMode ? "SNP Popup Preview" : "SNP QuickShell"
+    title: popupOnlyMode ? "Cortex Popup Preview" : "Cortex QuickShell"
     color: popupOnlyMode
         ? "#00000000"
         : (popupPreset === "batNoir" ? "#0D111A" : "#F2F2F2")

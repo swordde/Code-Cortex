@@ -3,7 +3,7 @@ set -euo pipefail
 
 BACKEND_HOST="${BACKEND_HOST:-localhost}"
 BACKEND_PORT="${BACKEND_PORT:-8080}"
-IGNORE_APPS_REGEX="${IGNORE_APPS_REGEX:-^(SNP|Code Cortex|Popup Tester)$}"
+IGNORE_APPS_REGEX="${IGNORE_APPS_REGEX:-^(Cortex|Code Cortex|Popup Tester)$}"
 QUEUE_FILE="${DBUS_BRIDGE_QUEUE_FILE:-/tmp/code_cortex_dbus_bridge_queue.ndjson}"
 
 if ! command -v dbus-monitor >/dev/null 2>&1; then

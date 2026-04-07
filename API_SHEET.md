@@ -1,4 +1,4 @@
-# SNP AI Layer — Complete API Reference
+# Cortex AI Layer — Complete API Reference
 Base URL: https://marisela-tiderode-mollifyingly.ngrok-free.dev
 No authentication required — exposed for external demo access via ngrok tunnel.
 All requests: Content-Type: application/json

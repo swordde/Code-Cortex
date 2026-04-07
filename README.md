@@ -1,4 +1,4 @@
-# Smart Notification Prioritizer
+# Cortex
 
 Cross-platform notification intelligence project.
 

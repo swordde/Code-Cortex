@@ -1,5 +1,5 @@
 [Unit]
-Description=SNP D-Bus Notification Bridge (User Service)
+Description=Cortex D-Bus Notification Bridge (User Service)
 After=network-online.target
 Wants=network-online.target
 

@@ -1,4 +1,4 @@
-// SNP AI Layer — Dart Integration Library
+// Cortex AI Layer — Dart Integration Library
 // Member 4 usage:
 //   1. Add http package to pubspec.yaml: http: ^1.1.0
 //   2. Import this file: import 'snp_api.dart';

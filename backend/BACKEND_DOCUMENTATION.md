@@ -4,7 +4,7 @@ This document explains how the backend works end-to-end: architecture, runtime f
 
 ## 1) Purpose
 
-The backend is the runtime core for Cortex/SNP.
+The backend is the runtime core for Cortex.
 
 It:
 - accepts notification ingestion events,
@@ -25,7 +25,7 @@ It:
 ## 3) Project Structure
 
 - `cmd/server/main.go`: entrypoint, dependency wiring, HTTP server startup/shutdown
-- `internal/config/config.go`: env config loader
+- `internal/config/config.go`: env confzig loader
 - `internal/server/router.go`: route registration + handlers + CORS/error response format
 - `internal/models/models.go`: API/data contracts (JSON + BSON tags)
 - `internal/store/mongo.go`: MongoDB collections, seed data, CRUD operations

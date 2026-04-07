@@ -1,6 +1,6 @@
 # Cortex Backend (Member 3)
 
-Go backend aligned to SNP backend spec with MongoDB Atlas persistence.
+Go backend aligned to Cortex backend spec with MongoDB Atlas persistence.
 
 Detailed documentation: [BACKEND_DOCUMENTATION.md](BACKEND_DOCUMENTATION.md)
 

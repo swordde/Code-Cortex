@@ -67,7 +67,7 @@ while true; do
   mapfile -t rows < <(
     printf '%s' "$json" | jq -r '.[] | [
       (.id // ""),
-      (.app_name // .app_package // "SNP"),
+      (.app_name // .app_package // "Cortex"),
       (.sender_name // "Notification"),
       (.content // ""),
       ((.priority // "LOW") | ascii_upcase)
